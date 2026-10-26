@@ -126,11 +126,17 @@ function doPost(e) {
       case 'updatePeriode':
         result = handleUpdatePeriode(ss, payload.data);
         break;
+      case 'deletePeriode':
+        result = handleDeletePeriode(ss, payload.id);
+        break;
       case 'createKategori':
         result = handleCreateKategori(ss, payload.data);
         break;
       case 'updateKategori':
         result = handleUpdateKategori(ss, payload.data);
+        break;
+      case 'deleteKategori':
+        result = handleDeleteKategori(ss, payload.id);
         break;
       default:
         result = { success: false, error: 'Aksi "' + action + '" tidak dikenali.' };
@@ -640,3 +646,52 @@ function handleUpdateKategori(ss, item) {
 
   return { success: false, error: 'Kategori tidak ditemukan.' };
 }
+
+/**
+ * 11. Hapus Periode
+ */
+function handleDeletePeriode(ss, id) {
+  const sheet = ss.getSheetByName('Periode');
+  if (!id) return { success: false, error: 'ID periode wajib ada.' };
+
+  const lastRow = sheet.getLastRow();
+  if (lastRow <= 1) return { success: false, error: 'Data kosong.' };
+
+  const values = sheet.getRange(1, 1, lastRow, sheet.getLastColumn()).getValues();
+  const headers = values[0];
+  const idColIndex = headers.indexOf('id');
+
+  for (let r = 1; r < values.length; r++) {
+    if (values[r][idColIndex] === id) {
+      sheet.deleteRow(r + 1);
+      return { success: true, message: 'Periode berhasil dihapus.' };
+    }
+  }
+
+  return { success: false, error: 'Periode tidak ditemukan.' };
+}
+
+/**
+ * 12. Hapus Kategori
+ */
+function handleDeleteKategori(ss, id) {
+  const sheet = ss.getSheetByName('Kategori');
+  if (!id) return { success: false, error: 'ID kategori wajib ada.' };
+
+  const lastRow = sheet.getLastRow();
+  if (lastRow <= 1) return { success: false, error: 'Data kosong.' };
+
+  const values = sheet.getRange(1, 1, lastRow, sheet.getLastColumn()).getValues();
+  const headers = values[0];
+  const idColIndex = headers.indexOf('id');
+
+  for (let r = 1; r < values.length; r++) {
+    if (values[r][idColIndex] === id) {
+      sheet.deleteRow(r + 1);
+      return { success: true, message: 'Kategori berhasil dihapus.' };
+    }
+  }
+
+  return { success: false, error: 'Kategori tidak ditemukan.' };
+}
+

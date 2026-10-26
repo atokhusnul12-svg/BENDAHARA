@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { addPeriode, setActivePeriode } from '@/lib/data-service';
+import { addPeriode, deletePeriode, setActivePeriode } from '@/lib/data-service';
 
 export async function POST(request: NextRequest) {
   try {
@@ -51,6 +51,31 @@ export async function PUT(request: NextRequest) {
   } catch (error: any) {
     return NextResponse.json(
       { success: false, error: error.message || 'Gagal mengubah periode aktif.' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get('id');
+    if (!id) {
+      return NextResponse.json({ success: false, error: 'ID periode wajib disertakan.' }, { status: 400 });
+    }
+
+    const result = await deletePeriode(id);
+    if (!result.success) {
+      return NextResponse.json({ success: false, error: result.error }, { status: 500 });
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: 'Periode berhasil dihapus.',
+    });
+  } catch (error: any) {
+    return NextResponse.json(
+      { success: false, error: error.message || 'Gagal menghapus periode.' },
       { status: 500 }
     );
   }

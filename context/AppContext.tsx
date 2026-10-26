@@ -47,12 +47,55 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
-  const [pengeluaran, setPengeluaran] = useState<PengeluaranItem[]>([]);
-  const [subsidi, setSubsidi] = useState<SubsidiItem[]>([]);
-  const [periode, setPeriode] = useState<PeriodeItem[]>([]);
-  const [kategori, setKategori] = useState<KategoriItem[]>([]);
+
+  // Inisialisasi awal dari cache browser lokal (offline-first)
+  const [pengeluaran, setPengeluaran] = useState<PengeluaranItem[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('mmd_offline_cache');
+        if (cached) return JSON.parse(cached).pengeluaran || [];
+      } catch (e) {}
+    }
+    return [];
+  });
+  const [subsidi, setSubsidi] = useState<SubsidiItem[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('mmd_offline_cache');
+        if (cached) return JSON.parse(cached).subsidi || [];
+      } catch (e) {}
+    }
+    return [];
+  });
+  const [periode, setPeriode] = useState<PeriodeItem[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('mmd_offline_cache');
+        if (cached) return JSON.parse(cached).periode || [];
+      } catch (e) {}
+    }
+    return [];
+  });
+  const [kategori, setKategori] = useState<KategoriItem[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('mmd_offline_cache');
+        if (cached) return JSON.parse(cached).kategori || [];
+      } catch (e) {}
+    }
+    return [];
+  });
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
-  const [summary, setSummary] = useState<FinancialSummary | null>(null);
+  const [summary, setSummary] = useState<FinancialSummary | null>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('mmd_offline_cache');
+        if (cached) return JSON.parse(cached).summary || null;
+      } catch (e) {}
+    }
+    return null;
+  });
+
   const [selectedPeriode, setSelectedPeriodeState] = useState<string>(() => {
     if (typeof window !== 'undefined') {
       try {
@@ -138,6 +181,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setSyncStatus(json.data.syncStatus || null);
         setSummary(json.data.summary || null);
 
+        // Simpan ke offline cache browser (localStorage)
+        if (typeof window !== 'undefined') {
+          try {
+            localStorage.setItem('mmd_offline_cache', JSON.stringify({
+              pengeluaran: json.data.pengeluaran || [],
+              subsidi: json.data.subsidi || [],
+              periode: json.data.periode || [],
+              kategori: json.data.kategori || [],
+              summary: json.data.summary || null,
+              savedAt: new Date().toISOString(),
+            }));
+          } catch (e) {}
+        }
+
         // Jika belum ada periode yang dipilih atau periode tidak ada lagi di daftar, gunakan periode aktif
         if (json.data.periode && json.data.periode.length > 0) {
           const currentValid = selectedPeriode && json.data.periode.some(
@@ -151,7 +208,29 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
       }
     } catch (err) {
-      console.error('Gagal memuat data:', err);
+      console.error('Gagal memuat data dari server, beralih ke cache offline:', err);
+      // Fallback ke cache offline browser
+      if (typeof window !== 'undefined') {
+        try {
+          const cachedStr = localStorage.getItem('mmd_offline_cache');
+          if (cachedStr) {
+            const cached = JSON.parse(cachedStr);
+            setPengeluaran(cached.pengeluaran || []);
+            setSubsidi(cached.subsidi || []);
+            setPeriode(cached.periode || []);
+            setKategori(cached.kategori || []);
+            setSummary(cached.summary || null);
+            setSyncStatus({
+              connected: false,
+              spreadsheetName: 'Cache Offline Browser',
+              spreadsheetId: '-',
+              lastSyncTime: cached.savedAt ? new Date(cached.savedAt).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' }) + ' WIB' : 'Offline',
+              error: 'Tidak dapat tersambung ke server. Menampilkan data dari cache lokal browser.',
+              isLocalFallback: true,
+            });
+          }
+        } catch (e) {}
+      }
     } finally {
       setLoading(false);
     }
@@ -160,6 +239,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     refreshData();
   }, [refreshData]);
+
+  // Otomatis sinkronisasi ulang saat koneksi internet kembali pulih
+  useEffect(() => {
+    const handleOnline = () => {
+      showToast('Koneksi Pulih', 'Menyinkronkan data dengan server...', 'info');
+      refreshData();
+    };
+    window.addEventListener('online', handleOnline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+    };
+  }, [refreshData, showToast]);
 
   // Auto-dismiss toast setelah 4 detik
   useEffect(() => {

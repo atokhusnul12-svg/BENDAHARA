@@ -1,5 +1,3 @@
-import fs from 'fs';
-import path from 'path';
 import {
   AppDatabase,
   FinancialSummary,
@@ -9,8 +7,6 @@ import {
   SubsidiItem,
   SyncStatus,
 } from './types';
-
-const DATA_FILE_PATH = path.join(process.cwd(), 'data', 'bendahara_mmd.json');
 
 // Default Kategori Awal sesuai Permintaan User
 const DEFAULT_KATEGORI: KategoriItem[] = [
@@ -77,70 +73,135 @@ export function matchCategory(
 }
 
 /**
- * Memastikan direktori dan database lokal tersedia
+ * Mendeteksi apakah aplikasi sedang berjalan di lingkungan serverless atau production
+ * (misal Vercel, AWS Lambda) di mana filesystem bersifat read-only.
  */
-function ensureLocalDb(): AppDatabase {
-  const dir = path.dirname(DATA_FILE_PATH);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
+function isServerlessOrProd(): boolean {
+  return Boolean(
+    process.env.VERCEL ||
+    process.env.VERCEL_ENV ||
+    process.env.AWS_LAMBDA_FUNCTION_NAME ||
+    process.env.LAMBDA_TASK_ROOT ||
+    (process.env.NODE_ENV === 'production' && !process.env.MMD_ALLOW_LOCAL_FS)
+  );
+}
+
+// In-Memory Database Singleton (Zero Filesystem Dependency for Vercel Serverless)
+let inMemoryDb: AppDatabase = {
+  pengeluaran: [],
+  subsidi: [],
+  periode: [...DEFAULT_PERIODE],
+  kategori: [...DEFAULT_KATEGORI],
+  config: {
+    spreadsheetUrl: process.env.GOOGLE_SPREADSHEET_URL || '',
+    scriptUrl: process.env.GOOGLE_SCRIPT_URL || '',
+    scriptToken: process.env.GOOGLE_SCRIPT_TOKEN || 'mmd-amanah-kas-secret',
+  },
+};
+
+/**
+ * Reset memory DB khusus untuk pengujian otomatis (test runner)
+ */
+export function resetLocalDbForTesting(): void {
+  inMemoryDb = {
+    pengeluaran: [],
+    subsidi: [],
+    periode: [...DEFAULT_PERIODE],
+    kategori: [...DEFAULT_KATEGORI],
+  };
+  if (!isServerlessOrProd()) {
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const filePath = path.join(process.cwd(), 'data', 'bendahara_mmd.json');
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+    } catch (e) {}
+  }
+}
+
+/**
+ * Mengakses database lokal / in-memory secara aman tanpa error filesystem di Vercel
+ */
+function getLocalDb(): AppDatabase {
+  // Pastikan kategori dan periode bawaan selalu ada
+  for (const defKat of DEFAULT_KATEGORI) {
+    if (!inMemoryDb.kategori.some(k => matchCategory(k.namaKategori, defKat))) {
+      inMemoryDb.kategori.unshift({ ...defKat });
+    }
+  }
+  for (const defPer of DEFAULT_PERIODE) {
+    if (!inMemoryDb.periode.some(p => p.labelPeriode.toLowerCase() === defPer.labelPeriode.toLowerCase())) {
+      inMemoryDb.periode.unshift({ ...defPer });
+    }
   }
 
-  if (!fs.existsSync(DATA_FILE_PATH)) {
-    const initialDb: AppDatabase = {
-      pengeluaran: [],
-      subsidi: [],
-      periode: DEFAULT_PERIODE,
-      kategori: DEFAULT_KATEGORI,
-      config: {
-        spreadsheetUrl: process.env.GOOGLE_SPREADSHEET_URL || '',
-        scriptUrl: process.env.GOOGLE_SCRIPT_URL || '',
-        scriptToken: process.env.GOOGLE_SCRIPT_TOKEN || 'mmd-amanah-kas-secret',
-      },
-    };
-    fs.writeFileSync(DATA_FILE_PATH, JSON.stringify(initialDb, null, 2), 'utf-8');
-    return initialDb;
+  // Jika berjalan di lingkungan Vercel / serverless read-only / production, gunakan in-memory store murni
+  if (isServerlessOrProd()) {
+    return inMemoryDb;
+  }
+
+  // Khusus local dev / CLI: muat dari file jika tersedia
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const filePath = path.join(process.cwd(), 'data', 'bendahara_mmd.json');
+    if (fs.existsSync(filePath)) {
+      const content = fs.readFileSync(filePath, 'utf-8');
+      const parsed = JSON.parse(content) as AppDatabase;
+      if (parsed.pengeluaran && inMemoryDb.pengeluaran.length === 0) inMemoryDb.pengeluaran = parsed.pengeluaran;
+      if (parsed.subsidi && inMemoryDb.subsidi.length === 0) inMemoryDb.subsidi = parsed.subsidi;
+      if (parsed.periode && parsed.periode.length > 0) {
+        for (const p of parsed.periode) {
+          if (!inMemoryDb.periode.some(x => x.id === p.id || x.labelPeriode.toLowerCase() === p.labelPeriode.toLowerCase())) {
+            inMemoryDb.periode.push(p);
+          }
+        }
+      }
+      if (parsed.kategori && parsed.kategori.length > 0) {
+        for (const k of parsed.kategori) {
+          if (!inMemoryDb.kategori.some(x => x.id === k.id || matchCategory(x.namaKategori, k))) {
+            inMemoryDb.kategori.push(k);
+          }
+        }
+      }
+    }
+  } catch (err) {
+    // Abaikan error filesystem
+  }
+
+  return inMemoryDb;
+}
+
+/**
+ * Menyimpan data ke in-memory store dan safe file backup jika bukan di Vercel
+ */
+function persistLocalDb(db: AppDatabase): void {
+  inMemoryDb = db;
+
+  // Di Vercel / serverless / production, jangan pernah mencoba membuat direktori atau menulis file
+  if (isServerlessOrProd()) {
+    return;
   }
 
   try {
-    const content = fs.readFileSync(DATA_FILE_PATH, 'utf-8');
-    const parsed = JSON.parse(content) as AppDatabase;
-    if (!parsed.pengeluaran) parsed.pengeluaran = [];
-    if (!parsed.subsidi) parsed.subsidi = [];
-    if (!parsed.periode || parsed.periode.length === 0) parsed.periode = [...DEFAULT_PERIODE];
-    if (!parsed.kategori || parsed.kategori.length === 0) parsed.kategori = [...DEFAULT_KATEGORI];
-
-    // Pastikan seluruh kategori bawaan selalu ada di list
-    for (const defKat of DEFAULT_KATEGORI) {
-      if (!parsed.kategori.some(k => matchCategory(k.namaKategori, defKat))) {
-        parsed.kategori.unshift(defKat);
-      }
+    const fs = require('fs');
+    const path = require('path');
+    const dataDir = path.join(process.cwd(), 'data');
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true });
     }
-    for (const defPer of DEFAULT_PERIODE) {
-      if (!parsed.periode.some(p => p.labelPeriode.toLowerCase() === defPer.labelPeriode.toLowerCase())) {
-        parsed.periode.unshift(defPer);
-      }
-    }
-
-    return parsed;
+    const filePath = path.join(dataDir, 'bendahara_mmd.json');
+    fs.writeFileSync(filePath, JSON.stringify(db, null, 2), 'utf-8');
   } catch (err) {
-    const fallback: AppDatabase = {
-      pengeluaran: [],
-      subsidi: [],
-      periode: [...DEFAULT_PERIODE],
-      kategori: [...DEFAULT_KATEGORI],
-    };
-    fs.writeFileSync(DATA_FILE_PATH, JSON.stringify(fallback, null, 2), 'utf-8');
-    return fallback;
+    // Abaikan error filesystem jika permission dibatasi
   }
 }
 
-function saveLocalDb(db: AppDatabase): void {
-  const dir = path.dirname(DATA_FILE_PATH);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-  fs.writeFileSync(DATA_FILE_PATH, JSON.stringify(db, null, 2), 'utf-8');
-}
+// Aliases untuk kompatibilitas internal
+const ensureLocalDb = getLocalDb;
+const saveLocalDb = persistLocalDb;
 
 /**
  * Panggil Google Apps Script via HTTP POST
@@ -212,7 +273,7 @@ export async function checkSyncStatus(): Promise<SyncStatus> {
       spreadsheetName: 'Belum Terhubung (Mode Lokal Aktif)',
       spreadsheetId: '-',
       lastSyncTime: now + ' WIB',
-      error: 'Google Apps Script URL belum diisi di .env.local. Sistem saat ini berjalan dengan penyimpanan lokal terproteksi.',
+      error: 'Google Apps Script URL belum diisi di Environment Variables Vercel (.env.local). Silakan tambahkan GOOGLE_SCRIPT_URL pada dashboard hosting Anda.',
       isLocalFallback: true,
     };
   }
@@ -371,10 +432,10 @@ export async function getAllData(): Promise<{
     kategori: localDb.kategori,
     syncStatus: {
       connected: false,
-      spreadsheetName: 'Penyimpanan Lokal Aktif',
+      spreadsheetName: 'Penyimpanan Aman Aktif',
       spreadsheetId: '-',
       lastSyncTime: new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' }) + ' WIB',
-      error: 'Google Apps Script belum dikonfigurasi. Menggunakan penyimpanan data lokal.',
+      error: 'Google Apps Script belum dikonfigurasi di Environment Variables Vercel. Menggunakan mode browser/in-memory.',
       isLocalFallback: true,
     },
   };
@@ -810,7 +871,38 @@ export async function setActivePeriode(id: string): Promise<{ success: boolean; 
 }
 
 /**
- * 9. Kelola Kategori (Tambah & Edit)
+ * 9. Hapus Periode
+ */
+export async function deletePeriode(id: string): Promise<{ success: boolean; error?: string }> {
+  if (!id) return { success: false, error: 'ID periode wajib ada.' };
+
+  const scriptUrl = process.env.GOOGLE_SCRIPT_URL?.trim();
+  let remoteDeleted = false;
+  if (scriptUrl) {
+    const remote = await callGoogleAppsScript('deletePeriode', { id });
+    if (!remote.success) {
+      return { success: false, error: remote.error || 'Gagal menghapus periode di Google Sheets.' };
+    }
+    remoteDeleted = true;
+  }
+
+  const localDb = ensureLocalDb();
+  const initialLen = localDb.periode.length;
+  localDb.periode = localDb.periode.filter(p => p.id !== id);
+  const localDeleted = localDb.periode.length < initialLen;
+  if (localDeleted) {
+    saveLocalDb(localDb);
+  }
+
+  if (remoteDeleted || localDeleted) {
+    return { success: true };
+  }
+
+  return { success: false, error: 'Periode tidak ditemukan.' };
+}
+
+/**
+ * 10. Kelola Kategori (Tambah, Edit, Hapus)
  */
 export async function addKategori(namaKategori: string): Promise<{
   success: boolean;
@@ -870,3 +962,32 @@ export async function updateKategori(item: { id: string; namaKategori?: string; 
   saveLocalDb(localDb);
   return { success: true };
 }
+
+export async function deleteKategori(id: string): Promise<{ success: boolean; error?: string }> {
+  if (!id) return { success: false, error: 'ID kategori wajib ada.' };
+
+  const scriptUrl = process.env.GOOGLE_SCRIPT_URL?.trim();
+  let remoteDeleted = false;
+  if (scriptUrl) {
+    const remote = await callGoogleAppsScript('deleteKategori', { id });
+    if (!remote.success) {
+      return { success: false, error: remote.error || 'Gagal menghapus kategori di Google Sheets.' };
+    }
+    remoteDeleted = true;
+  }
+
+  const localDb = ensureLocalDb();
+  const initialLen = localDb.kategori.length;
+  localDb.kategori = localDb.kategori.filter(k => k.id !== id);
+  const localDeleted = localDb.kategori.length < initialLen;
+  if (localDeleted) {
+    saveLocalDb(localDb);
+  }
+
+  if (remoteDeleted || localDeleted) {
+    return { success: true };
+  }
+
+  return { success: false, error: 'Kategori tidak ditemukan.' };
+}
+

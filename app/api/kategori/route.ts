@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { addKategori, updateKategori } from '@/lib/data-service';
+import { addKategori, deleteKategori, updateKategori } from '@/lib/data-service';
 
 export async function POST(request: NextRequest) {
   try {
@@ -45,6 +45,31 @@ export async function PUT(request: NextRequest) {
   } catch (error: any) {
     return NextResponse.json(
       { success: false, error: error.message || 'Gagal mengubah kategori.' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get('id');
+    if (!id) {
+      return NextResponse.json({ success: false, error: 'ID kategori wajib disertakan.' }, { status: 400 });
+    }
+
+    const result = await deleteKategori(id);
+    if (!result.success) {
+      return NextResponse.json({ success: false, error: result.error }, { status: 500 });
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: 'Kategori berhasil dihapus.',
+    });
+  } catch (error: any) {
+    return NextResponse.json(
+      { success: false, error: error.message || 'Gagal menghapus kategori.' },
       { status: 500 }
     );
   }

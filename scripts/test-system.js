@@ -25,6 +25,7 @@ const {
   calculateSummary,
   getAllData,
   checkSyncStatus,
+  resetLocalDbForTesting,
 } = require('../lib/data-service');
 
 let passCount = 0;
@@ -46,10 +47,15 @@ async function runAllTests() {
   console.log('   (Pengujian Terisolasi: Tes A s/d Tes F)');
   console.log('==========================================================\n');
 
-  // Bersihkan database file untuk pengujian terisolasi
+  // Bersihkan database memory & file untuk pengujian terisolasi
+  if (typeof resetLocalDbForTesting === 'function') {
+    resetLocalDbForTesting();
+  }
   const dbPath = path.join(process.cwd(), 'data', 'bendahara_mmd.json');
   if (fs.existsSync(dbPath)) {
-    fs.unlinkSync(dbPath);
+    try {
+      fs.unlinkSync(dbPath);
+    } catch (e) {}
   }
 
   // =========================================================================
