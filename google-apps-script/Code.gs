@@ -473,6 +473,7 @@ function handleUpdateSubsidi(ss, item) {
           sheet.getRange(r + 1, colIdx + 1).setValue(updated[key]);
         }
       }
+      SpreadsheetApp.flush();
       return { success: true, id: id, updated: updated };
     }
   }
@@ -508,7 +509,28 @@ function handleDeleteSubsidi(ss, id) {
     const cellId = String(values[r][idColIndex] || '').trim().toLowerCase();
     if (cellId === targetId) {
       sheet.deleteRow(r + 1);
+      SpreadsheetApp.flush();
+      try {
+        var cache = CacheService.getScriptCache();
+        if (cache) cache.removeAll(['all_data', 'subsidi_data', 'data']);
+      } catch (e) {}
       return { success: true, message: 'Subsidi berhasil dihapus.', id: id };
+    }
+  }
+
+  // Backup pencarian di seluruh kolom jika posisi kolom ID berubah
+  for (let r = 1; r < values.length; r++) {
+    for (let c = 0; c < values[r].length; c++) {
+      const cellVal = String(values[r][c] || '').trim().toLowerCase();
+      if (cellVal === targetId) {
+        sheet.deleteRow(r + 1);
+        SpreadsheetApp.flush();
+        try {
+          var cache = CacheService.getScriptCache();
+          if (cache) cache.removeAll(['all_data', 'subsidi_data', 'data']);
+        } catch (e) {}
+        return { success: true, message: 'Subsidi berhasil dihapus.', id: id };
+      }
     }
   }
 

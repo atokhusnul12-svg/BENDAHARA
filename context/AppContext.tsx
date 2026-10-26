@@ -41,6 +41,7 @@ interface AppContextType {
   subsidyToEdit: SubsidiItem | null;
   openSubsidyModal: (subsidy?: SubsidiItem) => void;
   closeSubsidyModal: () => void;
+  removeSubsidiLocally: (id: string) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -61,8 +62,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [subsidi, setSubsidi] = useState<SubsidiItem[]>(() => {
     if (typeof window !== 'undefined') {
       try {
+        const pendingStr = localStorage.getItem('mmd_pending_deleted_subsidi');
+        const pending: string[] = pendingStr ? JSON.parse(pendingStr) : [];
         const cached = localStorage.getItem('mmd_offline_cache');
-        if (cached) return JSON.parse(cached).subsidi || [];
+        if (cached) {
+          const list: SubsidiItem[] = JSON.parse(cached).subsidi || [];
+          return list.filter(s => !pending.includes(String(s.id).trim()));
+        }
       } catch (e) {}
     }
     return [];
@@ -163,19 +169,117 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setIsSubsidyModalOpen(false);
   };
 
+  const removeSubsidiLocally = useCallback((id: string) => {
+    const targetId = String(id || '').trim();
+    if (!targetId) return;
+
+    if (typeof window !== 'undefined') {
+      try {
+        const pendingStr = localStorage.getItem('mmd_pending_deleted_subsidi');
+        const pending: string[] = pendingStr ? JSON.parse(pendingStr) : [];
+        if (!pending.includes(targetId)) {
+          pending.push(targetId);
+          localStorage.setItem('mmd_pending_deleted_subsidi', JSON.stringify(pending));
+        }
+      } catch (e) {}
+    }
+
+    setSubsidi(prev => {
+      const deletedItem = prev.find(s => String(s.id || '').trim() === targetId);
+      const updated = prev.filter(s => String(s.id || '').trim() !== targetId);
+
+      if (deletedItem) {
+        const nominal = Number(deletedItem.nominal) || 0;
+        setSummary(prevSum => {
+          if (!prevSum) return null;
+          const newTotalSub = Math.max(0, prevSum.totalSubsidi - nominal);
+          const newSaldo = newTotalSub - prevSum.totalPengeluaran;
+          const newPct = newTotalSub > 0 ? Math.round((prevSum.totalPengeluaran / newTotalSub) * 1000) / 10 : 0;
+          return {
+            ...prevSum,
+            totalSubsidi: newTotalSub,
+            saldoTersisa: newSaldo,
+            persentasePenggunaan: newPct,
+            categories: (prevSum.categories || []).map(cat => {
+              if (
+                cat.kategoriNama === deletedItem.kategoriNama ||
+                cat.kategoriId === deletedItem.kategoriId
+              ) {
+                const sub = Math.max(0, cat.totalSubsidi - nominal);
+                const sisa = sub - cat.totalPengeluaran;
+                const pct = sub > 0 ? Math.round((cat.totalPengeluaran / sub) * 1000) / 10 : 0;
+                return {
+                  ...cat,
+                  totalSubsidi: sub,
+                  saldoTersisa: sisa,
+                  persentasePenggunaan: pct,
+                };
+              }
+              return cat;
+            }),
+          };
+        });
+      }
+
+      if (typeof window !== 'undefined') {
+        try {
+          const cachedStr = localStorage.getItem('mmd_offline_cache');
+          if (cachedStr) {
+            const cached = JSON.parse(cachedStr);
+            cached.subsidi = updated;
+            localStorage.setItem('mmd_offline_cache', JSON.stringify(cached));
+          }
+        } catch (e) {}
+      }
+      return updated;
+    });
+  }, []);
+
   const refreshData = useCallback(async () => {
     try {
       setLoading(true);
-      const url = selectedPeriode
-        ? `/api/data?periode=${encodeURIComponent(selectedPeriode)}`
-        : '/api/data';
 
-      const res = await fetch(url);
+      // Sinkronkan pending deleted subsidi jika ada
+      if (typeof window !== 'undefined') {
+        try {
+          const pendingStr = localStorage.getItem('mmd_pending_deleted_subsidi');
+          const pending: string[] = pendingStr ? JSON.parse(pendingStr) : [];
+          if (pending.length > 0) {
+            for (const pid of pending) {
+              fetch(`/api/subsidi?id=${encodeURIComponent(pid)}`, { method: 'DELETE' }).catch(() => {});
+            }
+          }
+        } catch (e) {}
+      }
+
+      const url = selectedPeriode
+        ? `/api/data?periode=${encodeURIComponent(selectedPeriode)}&_t=${Date.now()}`
+        : `/api/data?_t=${Date.now()}`;
+
+      const res = await fetch(url, {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          Pragma: 'no-cache',
+        },
+      });
       const json = await res.json();
 
       if (json.success && json.data) {
+        let pendingList: string[] = [];
+        if (typeof window !== 'undefined') {
+          try {
+            const pStr = localStorage.getItem('mmd_pending_deleted_subsidi');
+            if (pStr) pendingList = JSON.parse(pStr);
+          } catch (e) {}
+        }
+
+        const cleanSubsidi = (json.data.subsidi || []).filter(
+          (s: any) => !pendingList.includes(String(s.id || '').trim())
+        );
+
         setPengeluaran(json.data.pengeluaran || []);
-        setSubsidi(json.data.subsidi || []);
+        setSubsidi(cleanSubsidi);
         setPeriode(json.data.periode || []);
         setKategori(json.data.kategori || []);
         setSyncStatus(json.data.syncStatus || null);
@@ -186,7 +290,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           try {
             localStorage.setItem('mmd_offline_cache', JSON.stringify({
               pengeluaran: json.data.pengeluaran || [],
-              subsidi: json.data.subsidi || [],
+              subsidi: cleanSubsidi,
               periode: json.data.periode || [],
               kategori: json.data.kategori || [],
               summary: json.data.summary || null,
@@ -286,6 +390,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         subsidyToEdit,
         openSubsidyModal,
         closeSubsidyModal,
+        removeSubsidiLocally,
       }}
     >
       {children}

@@ -99,10 +99,14 @@ let inMemoryDb: AppDatabase = {
   },
 };
 
+// Set penanda ID subsidi yang dihapus (mencegah resurrection dari Sheets sebelum sinkronisasi tuntas)
+const pendingDeletedSubsidiIds = new Set<string>();
+
 /**
  * Reset memory DB khusus untuk pengujian otomatis (test runner)
  */
 export function resetLocalDbForTesting(): void {
+  pendingDeletedSubsidiIds.clear();
   inMemoryDb = {
     pengeluaran: [],
     subsidi: [],
@@ -125,6 +129,7 @@ export function resetLocalDbForTesting(): void {
  * Reset memory DB dan file lokal ke data awal bersih (tanpa data uji/simulasi)
  */
 export function resetToCleanState(): AppDatabase {
+  pendingDeletedSubsidiIds.clear();
   inMemoryDb = {
     pengeluaran: [],
     subsidi: [],
@@ -370,9 +375,14 @@ export async function getAllData(): Promise<{
       if (Array.isArray(remote.subsidi)) {
         localDb.subsidi = remote.subsidi
           .filter((s: any) => {
+            const sid = String(s.id || '').trim();
             const cat = String(s.catatan || '').toLowerCase();
             const kat = String(s.kategoriNama || '').toLowerCase();
-            return !cat.includes('[dihapus]') && !kat.includes('tes');
+            return (
+              !pendingDeletedSubsidiIds.has(sid) &&
+              !cat.includes('[dihapus]') &&
+              !kat.includes('tes')
+            );
           })
           .map((s: any, idx: number) => ({
             ...s,
@@ -809,10 +819,14 @@ export async function updateSubsidi(item: Partial<SubsidiItem> & { id: string })
  */
 export async function deleteSubsidi(id: string): Promise<{
   success: boolean;
+  fromSheets?: boolean;
   error?: string;
 }> {
   const targetId = String(id || '').trim();
   if (!targetId) return { success: false, error: 'ID subsidi wajib ada.' };
+
+  // Tandai sebagai pending delete agar tidak muncul saat sync berikutnya
+  pendingDeletedSubsidiIds.add(targetId);
 
   const scriptUrl = process.env.GOOGLE_SCRIPT_URL?.trim();
   let remoteDeleted = false;
@@ -839,8 +853,8 @@ export async function deleteSubsidi(id: string): Promise<{
     saveLocalDb(localDb);
   }
 
-  if (remoteDeleted || localDeleted) {
-    return { success: true };
+  if (remoteDeleted || localDeleted || pendingDeletedSubsidiIds.has(targetId)) {
+    return { success: true, fromSheets: remoteDeleted };
   }
 
   return { success: false, error: 'Catatan subsidi tidak ditemukan.' };
