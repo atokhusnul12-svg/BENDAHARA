@@ -368,29 +368,40 @@ export async function getAllData(): Promise<{
       }
 
       if (Array.isArray(remote.subsidi)) {
-        localDb.subsidi = remote.subsidi.map((s: any) => ({
-          ...s,
-          id: String(s.id || ''),
-          bulanHijriah: String(s.bulanHijriah || ''),
-          tahunHijriah: String(s.tahunHijriah || ''),
-          periodeId: String(s.periodeId || ''),
-          kategoriId: String(s.kategoriId || ''),
-          kategoriNama: String(s.kategoriNama || ''),
-          catatan: s.catatan ? String(s.catatan) : '',
-          nominal: Number(s.nominal) || 0,
-          tanggalTransaksi: s.tanggalTransaksi ? String(s.tanggalTransaksi).split('T')[0] : '',
-        }));
+        localDb.subsidi = remote.subsidi
+          .filter((s: any) => {
+            const cat = String(s.catatan || '').toLowerCase();
+            const kat = String(s.kategoriNama || '').toLowerCase();
+            return !cat.includes('[dihapus]') && !kat.includes('tes');
+          })
+          .map((s: any) => ({
+            ...s,
+            id: String(s.id || ''),
+            bulanHijriah: String(s.bulanHijriah || ''),
+            tahunHijriah: String(s.tahunHijriah || ''),
+            periodeId: String(s.periodeId || ''),
+            kategoriId: String(s.kategoriId || ''),
+            kategoriNama: String(s.kategoriNama || ''),
+            catatan: s.catatan ? String(s.catatan) : '',
+            nominal: Number(s.nominal) || 0,
+            tanggalTransaksi: s.tanggalTransaksi ? String(s.tanggalTransaksi).split('T')[0] : '',
+          }));
       }
 
       if (Array.isArray(remote.periode)) {
-        const remotePers = remote.periode.map((per: any) => ({
-          ...per,
-          id: String(per.id || ''),
-          namaBulanHijriah: String(per.namaBulanHijriah || ''),
-          tahunHijriah: String(per.tahunHijriah || ''),
-          labelPeriode: String(per.labelPeriode || ''),
-          statusAktif: Boolean(per.statusAktif),
-        }));
+        const remotePers = remote.periode
+          .filter((per: any) => {
+            const label = String(per.labelPeriode || '').trim();
+            return !label.startsWith('[Dihapus]') && !label.toLowerCase().includes('tes');
+          })
+          .map((per: any) => ({
+            ...per,
+            id: String(per.id || ''),
+            namaBulanHijriah: String(per.namaBulanHijriah || ''),
+            tahunHijriah: String(per.tahunHijriah || ''),
+            labelPeriode: String(per.labelPeriode || ''),
+            statusAktif: Boolean(per.statusAktif),
+          }));
 
         const mergedPeriode = [...remotePers];
         for (const defPer of DEFAULT_PERIODE) {
@@ -403,12 +414,23 @@ export async function getAllData(): Promise<{
       }
 
       if (Array.isArray(remote.kategori)) {
-        const remoteKats = remote.kategori.map((kat: any) => ({
-          ...kat,
-          id: String(kat.id || ''),
-          namaKategori: String(kat.namaKategori || ''),
-          statusAktif: kat.statusAktif !== undefined ? Boolean(kat.statusAktif) : true,
-        }));
+        const remoteKats = remote.kategori
+          .filter((kat: any) => {
+            const name = String(kat.namaKategori || '').trim();
+            const id = String(kat.id || '').trim();
+            return (
+              !name.startsWith('[Dihapus]') &&
+              !name.toLowerCase().includes('tes kategori') &&
+              id !== 'KAT-TEST' &&
+              kat.statusAktif !== false
+            );
+          })
+          .map((kat: any) => ({
+            ...kat,
+            id: String(kat.id || ''),
+            namaKategori: String(kat.namaKategori || ''),
+            statusAktif: kat.statusAktif !== undefined ? Boolean(kat.statusAktif) : true,
+          }));
 
         const mergedKategori = [...remoteKats];
         for (const defKat of DEFAULT_KATEGORI) {
@@ -910,10 +932,17 @@ export async function deletePeriode(id: string): Promise<{ success: boolean; err
   let remoteDeleted = false;
   if (scriptUrl) {
     const remote = await callGoogleAppsScript('deletePeriode', { id });
-    if (!remote.success) {
-      return { success: false, error: remote.error || 'Gagal menghapus periode di Google Sheets.' };
+    if (remote.success) {
+      remoteDeleted = true;
+    } else {
+      // Fallback jika Apps Script deployment belum mendukung aksi deletePeriode
+      const fallback = await callGoogleAppsScript('updatePeriode', {
+        data: { id, statusAktif: false, labelPeriode: '[Dihapus] ' + id },
+      }).catch(() => null);
+      if (fallback?.success) {
+        remoteDeleted = true;
+      }
     }
-    remoteDeleted = true;
   }
 
   const localDb = ensureLocalDb();
@@ -1000,10 +1029,17 @@ export async function deleteKategori(id: string): Promise<{ success: boolean; er
   let remoteDeleted = false;
   if (scriptUrl) {
     const remote = await callGoogleAppsScript('deleteKategori', { id });
-    if (!remote.success) {
-      return { success: false, error: remote.error || 'Gagal menghapus kategori di Google Sheets.' };
+    if (remote.success) {
+      remoteDeleted = true;
+    } else {
+      // Fallback jika Apps Script deployment belum mendukung aksi deleteKategori
+      const fallback = await callGoogleAppsScript('updateKategori', {
+        data: { id, statusAktif: false, namaKategori: '[Dihapus] ' + id },
+      }).catch(() => null);
+      if (fallback?.success) {
+        remoteDeleted = true;
+      }
     }
-    remoteDeleted = true;
   }
 
   const localDb = ensureLocalDb();
