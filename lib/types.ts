@@ -1,0 +1,92 @@
+export interface PengeluaranItem {
+  id: string;
+  eventId: string;
+  createdAt: string;
+  updatedAt: string;
+  tanggalTransaksi: string;
+  periodeId: string;
+  bulanHijriah: string;
+  tahunHijriah: string;
+  kategoriId: string;
+  kategoriNama: string;
+  jenisAcara: string;
+  namaBarang: string;
+  jumlah: number;
+  satuan: string;
+  hargaSatuan: number;
+  total: number;
+  catatan?: string;
+}
+
+export interface SubsidiItem {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  tanggalTransaksi: string;
+  periodeId: string;
+  bulanHijriah: string;
+  tahunHijriah: string;
+  kategoriId: string;
+  kategoriNama: string;
+  nominal: number;
+  catatan?: string;
+}
+
+export interface PeriodeItem {
+  id: string;
+  namaBulanHijriah: string;
+  tahunHijriah: string;
+  labelPeriode: string;
+  statusAktif: boolean;
+  createdAt: string;
+}
+
+export interface KategoriItem {
+  id: string;
+  namaKategori: string;
+  statusAktif: boolean;
+  createdAt: string;
+  updatedAt: string;
+  iconName?: string;
+}
+
+export interface SyncStatus {
+  connected: boolean;
+  spreadsheetName: string;
+  spreadsheetId: string;
+  lastSyncTime: string;
+  error?: string;
+  isLocalFallback?: boolean;
+}
+
+export interface CategorySummary {
+  kategoriId: string;
+  kategoriNama: string;
+  totalSubsidi: number;
+  totalPengeluaran: number;
+  saldoTersisa: number;
+  persentasePenggunaan: number;
+  jumlahTransaksi: number;
+}
+
+export interface FinancialSummary {
+  periodeLabel: string;
+  totalSubsidi: number;
+  totalPengeluaran: number;
+  saldoTersisa: number;
+  persentasePenggunaan: number;
+  jumlahTransaksi: number;
+  categories: CategorySummary[];
+}
+
+export interface AppDatabase {
+  pengeluaran: PengeluaranItem[];
+  subsidi: SubsidiItem[];
+  periode: PeriodeItem[];
+  kategori: KategoriItem[];
+  config?: {
+    spreadsheetUrl?: string;
+    scriptUrl?: string;
+    scriptToken?: string;
+  };
+}

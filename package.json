@@ -1,0 +1,32 @@
+{
+  "name": "bendahara-mmd",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "test": "npx tsx scripts/test-system.js",
+    "postinstall": "node -e \"const fs=require('fs'); try{const f1='node_modules/@types/react/package.json'; if(fs.existsSync(f1)){const j=JSON.parse(fs.readFileSync(f1,'utf8')); if(j.exports){j.exports['.']={default:'./index.d.ts',...j.exports['.']}; j.exports['./index.d.ts']='./index.d.ts'; j.exports['./*']='./*'; j.main='index.d.ts'; fs.writeFileSync(f1,JSON.stringify(j,null,2));}} const f2='node_modules/@types/node/package.json'; if(fs.existsSync(f2)){const j=JSON.parse(fs.readFileSync(f2,'utf8')); j.main='index.d.ts'; fs.writeFileSync(f2,JSON.stringify(j,null,2));}}catch(e){}\""
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "next": "^14.2.35",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^18.3.7",
+    "autoprefixer": "^10.6.1",
+    "postcss": "^8.5.31",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.5.4"
+  }
+}

@@ -1,0 +1,117 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { addPengeluaran, deletePengeluaran, updatePengeluaran } from '@/lib/data-service';
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+
+    // Mendukung batch item atau item tunggal
+    let itemsToInsert = [];
+
+    if (Array.isArray(body.items) && body.items.length > 0) {
+      itemsToInsert = body.items.map((it: any) => ({
+        ...it,
+        periodeId: body.periodeId || it.periodeId || '',
+        bulanHijriah: body.bulanHijriah || it.bulanHijriah || '',
+        tahunHijriah: body.tahunHijriah || it.tahunHijriah || '',
+        kategoriId: body.kategoriId || it.kategoriId || '',
+        kategoriNama: body.kategoriNama || it.kategoriNama || '',
+        jenisAcara: body.jenisAcara || it.jenisAcara || '',
+        tanggalTransaksi: body.tanggalTransaksi || it.tanggalTransaksi || new Date().toISOString().split('T')[0],
+        catatan: body.catatan || it.catatan || '',
+      }));
+    } else {
+      itemsToInsert = [body];
+    }
+
+    // Validasi data
+    for (const item of itemsToInsert) {
+      if (!item.kategoriNama && !item.kategoriId) {
+        return NextResponse.json({ success: false, error: 'Kategori kegiatan wajib dipilih.' }, { status: 400 });
+      }
+      if (!item.namaBarang || item.namaBarang.trim() === '') {
+        return NextResponse.json({ success: false, error: 'Nama barang / rincian belanja wajib diisi.' }, { status: 400 });
+      }
+      if (!item.jumlah || Number(item.jumlah) <= 0) {
+        return NextResponse.json({ success: false, error: 'Jumlah barang harus lebih dari nol (0).' }, { status: 400 });
+      }
+      if (item.hargaSatuan === undefined || Number(item.hargaSatuan) < 0) {
+        return NextResponse.json({ success: false, error: 'Harga satuan tidak boleh bernilai negatif.' }, { status: 400 });
+      }
+    }
+
+    const result = await addPengeluaran(itemsToInsert);
+    if (!result.success) {
+      return NextResponse.json({ success: false, error: result.error }, { status: 500 });
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: 'Pengeluaran berhasil disimpan ke Google Sheets.',
+      data: result.data,
+    });
+  } catch (error: any) {
+    return NextResponse.json(
+      { success: false, error: error.message || 'Terjadi kesalahan saat memproses pengeluaran.' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PUT(request: NextRequest) {
+  try {
+    const body = await request.json();
+    if (!body.id) {
+      return NextResponse.json({ success: false, error: 'ID transaksi pengeluaran wajib disertakan.' }, { status: 400 });
+    }
+
+    if (body.jumlah !== undefined && Number(body.jumlah) <= 0) {
+      return NextResponse.json({ success: false, error: 'Jumlah barang harus lebih dari nol.' }, { status: 400 });
+    }
+
+    if (body.hargaSatuan !== undefined && Number(body.hargaSatuan) < 0) {
+      return NextResponse.json({ success: false, error: 'Harga satuan tidak boleh negatif.' }, { status: 400 });
+    }
+
+    const result = await updatePengeluaran(body);
+    if (!result.success) {
+      return NextResponse.json({ success: false, error: result.error }, { status: 500 });
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: 'Transaksi pengeluaran berhasil diperbarui di Google Sheets.',
+    });
+  } catch (error: any) {
+    return NextResponse.json(
+      { success: false, error: error.message || 'Gagal mengubah data pengeluaran.' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get('id');
+
+    if (!id) {
+      return NextResponse.json({ success: false, error: 'Parameter ID transaksi pengeluaran wajib ada.' }, { status: 400 });
+    }
+
+    const result = await deletePengeluaran(id);
+    if (!result.success) {
+      return NextResponse.json({ success: false, error: result.error }, { status: 500 });
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: 'Transaksi pengeluaran berhasil dihapus.',
+    });
+  } catch (error: any) {
+    return NextResponse.json(
+      { success: false, error: error.message || 'Gagal menghapus transaksi.' },
+      { status: 500 }
+    );
+  }
+}
