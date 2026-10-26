@@ -122,6 +122,36 @@ export function resetLocalDbForTesting(): void {
 }
 
 /**
+ * Reset memory DB dan file lokal ke data awal bersih (tanpa data uji/simulasi)
+ */
+export function resetToCleanState(): AppDatabase {
+  inMemoryDb = {
+    pengeluaran: [],
+    subsidi: [],
+    periode: [...DEFAULT_PERIODE],
+    kategori: [...DEFAULT_KATEGORI],
+    config: {
+      spreadsheetUrl: process.env.GOOGLE_SPREADSHEET_URL || '',
+      scriptUrl: process.env.GOOGLE_SCRIPT_URL || '',
+      scriptToken: process.env.GOOGLE_SCRIPT_TOKEN || 'mmd-amanah-kas-secret',
+    },
+  };
+  if (!isServerlessOrProd()) {
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const dataDir = path.join(process.cwd(), 'data');
+      if (!fs.existsSync(dataDir)) {
+        fs.mkdirSync(dataDir, { recursive: true });
+      }
+      const filePath = path.join(dataDir, 'bendahara_mmd.json');
+      fs.writeFileSync(filePath, JSON.stringify(inMemoryDb, null, 2), 'utf-8');
+    } catch (e) {}
+  }
+  return inMemoryDb;
+}
+
+/**
  * Mengakses database lokal / in-memory secara aman tanpa error filesystem di Vercel
  */
 function getLocalDb(): AppDatabase {

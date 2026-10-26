@@ -367,6 +367,54 @@ async function runAllTests() {
   console.log(`HASIL AKHIR PENGUJIAN: ${passCount} LULUS, ${failCount} GAGAL`);
   console.log('==========================================================\n');
 
+  // Bersihkan database file dan memory setelah selesai pengujian agar tidak mengotori aplikasi pengguna
+  if (typeof resetLocalDbForTesting === 'function') {
+    resetLocalDbForTesting();
+  }
+  const cleanDb = {
+    pengeluaran: [],
+    subsidi: [],
+    periode: [
+      {
+        id: 'PER-1448-JU',
+        namaBulanHijriah: 'Jumadal Ula',
+        tahunHijriah: '1448',
+        labelPeriode: 'Jumadal Ula 1448 H',
+        statusAktif: true,
+        createdAt: '2026-10-27T00:00:00.000Z',
+      },
+    ],
+    kategori: [
+      {
+        id: 'KAT-LBM',
+        namaKategori: 'LBM (Lajnah Bahtsul Masail)',
+        statusAktif: true,
+        createdAt: '2026-10-27T00:00:00.000Z',
+        updatedAt: '2026-10-27T00:00:00.000Z',
+        iconName: 'menu_book',
+      },
+      {
+        id: 'KAT-TFQ',
+        namaKategori: 'Tafaquh & Mubahitsin',
+        statusAktif: true,
+        createdAt: '2026-10-27T00:00:00.000Z',
+        updatedAt: '2026-10-27T00:00:00.000Z',
+        iconName: 'groups',
+      },
+      {
+        id: 'KAT-MSY',
+        namaKategori: 'Musyawaroh',
+        statusAktif: true,
+        createdAt: '2026-10-27T00:00:00.000Z',
+        updatedAt: '2026-10-27T00:00:00.000Z',
+        iconName: 'forum',
+      },
+    ],
+  };
+  try {
+    fs.writeFileSync(dbPath, JSON.stringify(cleanDb, null, 2), 'utf-8');
+  } catch (e) {}
+
   if (failCount > 0) {
     process.exit(1);
   }

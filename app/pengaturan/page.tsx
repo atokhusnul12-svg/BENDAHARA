@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useApp } from '@/context/AppContext';
 import { BULAN_HIJRIAH_LIST } from '@/lib/format';
 import { KategoriItem, PeriodeItem } from '@/lib/types';
+import DeleteConfirmModal from '@/components/DeleteConfirmModal';
 
 export default function PengaturanPage() {
   const {
@@ -31,6 +32,20 @@ export default function PengaturanPage() {
   const [selectedTahun, setSelectedTahun] = useState(1448);
   const [periodStatusAktif, setPeriodStatusAktif] = useState(false);
   const [savingPeriod, setSavingPeriod] = useState(false);
+
+  // Delete Periode State
+  const [deletePeriodModalOpen, setDeletePeriodModalOpen] = useState(false);
+  const [periodToDelete, setPeriodToDelete] = useState<PeriodeItem | null>(null);
+  const [deletingPeriod, setDeletingPeriod] = useState(false);
+
+  // Delete Kategori State
+  const [deleteCategoryModalOpen, setDeleteCategoryModalOpen] = useState(false);
+  const [categoryToDelete, setCategoryToDelete] = useState<KategoriItem | null>(null);
+  const [deletingCategory, setDeletingCategory] = useState(false);
+
+  // Reset Data & Cache State
+  const [resetModalOpen, setResetModalOpen] = useState(false);
+  const [resetting, setResetting] = useState(false);
 
   // Modal Panduan Lengkap
   const [guideModalOpen, setGuideModalOpen] = useState(false);
@@ -157,6 +172,99 @@ export default function PengaturanPage() {
       showToast('Periode Aktif Diubah', `Periode sekarang: ${p.labelPeriode}`);
     } catch (err: any) {
       showToast('Gagal Mengubah Periode', err.message, 'error');
+    }
+  };
+
+  const handleDeletePeriodClick = (p: PeriodeItem) => {
+    if (periode.length <= 1) {
+      showToast('Tidak Dapat Dihapus', 'Minimal harus ada satu periode dalam sistem.', 'error');
+      return;
+    }
+    setPeriodToDelete(p);
+    setDeletePeriodModalOpen(true);
+  };
+
+  const handleConfirmDeletePeriod = async () => {
+    if (!periodToDelete) return;
+    setDeletingPeriod(true);
+    try {
+      const res = await fetch(`/api/periode?id=${encodeURIComponent(periodToDelete.id)}`, {
+        method: 'DELETE',
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || 'Gagal menghapus periode.');
+
+      if (periodToDelete.labelPeriode === selectedPeriode) {
+        const remaining = periode.filter(p => p.id !== periodToDelete.id);
+        if (remaining.length > 0) {
+          setSelectedPeriode(remaining[0].labelPeriode);
+        }
+      }
+
+      await refreshData();
+      showToast('Periode Dihapus', `Periode "${periodToDelete.labelPeriode}" berhasil dihapus.`);
+      setDeletePeriodModalOpen(false);
+      setPeriodToDelete(null);
+    } catch (err: any) {
+      showToast('Gagal Menghapus Periode', err.message, 'error');
+    } finally {
+      setDeletingPeriod(false);
+    }
+  };
+
+  const handleDeleteCategoryClick = (kat: KategoriItem) => {
+    if (kategori.length <= 1) {
+      showToast('Tidak Dapat Dihapus', 'Minimal harus ada satu kategori kas dalam sistem.', 'error');
+      return;
+    }
+    setCategoryToDelete(kat);
+    setDeleteCategoryModalOpen(true);
+  };
+
+  const handleConfirmDeleteCategory = async () => {
+    if (!categoryToDelete) return;
+    setDeletingCategory(true);
+    try {
+      const res = await fetch(`/api/kategori?id=${encodeURIComponent(categoryToDelete.id)}`, {
+        method: 'DELETE',
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || 'Gagal menghapus kategori.');
+
+      await refreshData();
+      showToast('Kategori Dihapus', `Kategori "${categoryToDelete.namaKategori}" berhasil dihapus.`);
+      setDeleteCategoryModalOpen(false);
+      setCategoryToDelete(null);
+    } catch (err: any) {
+      showToast('Gagal Menghapus Kategori', err.message, 'error');
+    } finally {
+      setDeletingCategory(false);
+    }
+  };
+
+  const handleConfirmReset = async () => {
+    setResetting(true);
+    try {
+      const res = await fetch('/api/reset', {
+        method: 'POST',
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || 'Gagal membersihkan data.');
+
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.removeItem('mmd_offline_cache');
+          localStorage.removeItem('mmd_selected_periode');
+        } catch (e) {}
+      }
+
+      await refreshData();
+      showToast('Data Bersih & Cache Dihapus', 'Aplikasi telah dikembalikan ke kondisi awal tanpa data uji coba.');
+      setResetModalOpen(false);
+    } catch (err: any) {
+      showToast('Gagal Mereset Data', err.message, 'error');
+    } finally {
+      setResetting(false);
     }
   };
 
@@ -356,7 +464,7 @@ export default function PengaturanPage() {
                   </div>
                 </div>
 
-                <div>
+                <div className="flex items-center gap-1.5 flex-shrink-0">
                   {isCurrentlyActive ? (
                     <span className="px-2.5 py-1 rounded-full bg-tertiary-fixed text-on-tertiary-fixed font-label-sm text-[11px] font-bold">
                       Aktif
@@ -368,6 +476,17 @@ export default function PengaturanPage() {
                       className="px-2.5 py-1 rounded-full bg-surface-container-high text-primary hover:bg-primary hover:text-on-primary text-[11px] font-semibold active:scale-95 transition-all"
                     >
                       Pilih Aktif
+                    </button>
+                  )}
+                  {periode.length > 1 && !isCurrentlyActive && (
+                    <button
+                      type="button"
+                      aria-label={`Hapus Periode ${p.labelPeriode}`}
+                      onClick={() => handleDeletePeriodClick(p)}
+                      className="w-8 h-8 rounded-full bg-surface-container-low text-on-surface-variant hover:text-error hover:bg-error-container/20 flex items-center justify-center active:scale-95 transition-colors"
+                      title="Hapus Periode"
+                    >
+                      <span className="material-symbols-outlined text-[17px]">delete</span>
                     </button>
                   )}
                 </div>
@@ -423,14 +542,28 @@ export default function PengaturanPage() {
                   </div>
                 </div>
               </div>
-              <button
-                aria-label={`Edit Kategori ${kat.namaKategori}`}
-                className="w-9 h-9 rounded-full bg-surface-container-low text-on-surface-variant hover:text-primary hover:bg-surface-container flex items-center justify-center active:scale-95 flex-shrink-0"
-                onClick={() => openEditCategory(kat)}
-                type="button"
-              >
-                <span className="material-symbols-outlined text-[18px]">edit</span>
-              </button>
+              <div className="flex items-center gap-1.5 flex-shrink-0">
+                <button
+                  aria-label={`Edit Kategori ${kat.namaKategori}`}
+                  className="w-9 h-9 rounded-full bg-surface-container-low text-on-surface-variant hover:text-primary hover:bg-surface-container flex items-center justify-center active:scale-95 flex-shrink-0 transition-colors"
+                  onClick={() => openEditCategory(kat)}
+                  type="button"
+                  title="Edit Nama Kategori"
+                >
+                  <span className="material-symbols-outlined text-[18px]">edit</span>
+                </button>
+                {kategori.length > 1 && (
+                  <button
+                    aria-label={`Hapus Kategori ${kat.namaKategori}`}
+                    className="w-9 h-9 rounded-full bg-surface-container-low text-on-surface-variant hover:text-error hover:bg-error-container/20 flex items-center justify-center active:scale-95 flex-shrink-0 transition-colors"
+                    onClick={() => handleDeleteCategoryClick(kat)}
+                    type="button"
+                    title="Hapus Kategori"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">delete</span>
+                  </button>
+                )}
+              </div>
             </div>
           ))}
         </div>
@@ -501,6 +634,41 @@ export default function PengaturanPage() {
               <span>Buka Panduan</span>
             </button>
           </div>
+        </div>
+      </section>
+
+      {/* 5. Pembersihan Cache & Reset Simulasi */}
+      <section className="flex flex-col gap-space-sm mb-space-xl">
+        <div className="flex items-center gap-space-xs px-space-xs">
+          <span className="material-symbols-outlined text-amber-700 text-[18px]">restart_alt</span>
+          <h3 className="font-label-lg text-label-lg text-on-surface font-semibold">
+            Pembersihan Data & Cache Browser
+          </h3>
+        </div>
+
+        <div className="bg-surface-container-lowest rounded-xl p-space-lg shadow-sm border border-amber-200/60 bg-amber-50/20 flex flex-col gap-space-sm">
+          <div className="flex items-start gap-space-sm">
+            <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-900 flex items-center justify-center flex-shrink-0">
+              <span className="material-symbols-outlined text-[22px]">cleaning_services</span>
+            </div>
+            <div className="flex flex-col min-w-0">
+              <span className="font-headline-md text-sm text-on-surface font-bold">
+                Bersihkan Data Uji Coba & Cache Lokal
+              </span>
+              <p className="font-body-sm text-xs text-on-surface-variant mt-0.5 leading-relaxed">
+                Jika Anda melihat data simulasi atau nama yang tidak pernah Anda masukkan, Anda dapat membersihkan cache browser dan mengembalikan data sistem ke kondisi awal yang bersih.
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setResetModalOpen(true)}
+            className="w-full h-11 mt-1 rounded-xl bg-surface-container-high hover:bg-amber-100 text-amber-950 font-label-md text-label-md font-semibold flex items-center justify-center gap-2 active:scale-95 transition-all border border-amber-300/40"
+          >
+            <span className="material-symbols-outlined text-[18px]">cached</span>
+            <span>Bersihkan Cache & Reset Data Awal</span>
+          </button>
         </div>
       </section>
 
@@ -788,6 +956,42 @@ export default function PengaturanPage() {
           </div>
         </div>
       )}
+
+      {/* Modal Konfirmasi Hapus Periode */}
+      <DeleteConfirmModal
+        isOpen={deletePeriodModalOpen}
+        title="Hapus Periode Pembukuan?"
+        message={`Apakah Anda yakin ingin menghapus periode "${periodToDelete?.labelPeriode}"? Tindakan ini tidak dapat dibatalkan.`}
+        onConfirm={handleConfirmDeletePeriod}
+        onCancel={() => {
+          setDeletePeriodModalOpen(false);
+          setPeriodToDelete(null);
+        }}
+        loading={deletingPeriod}
+      />
+
+      {/* Modal Konfirmasi Hapus Kategori */}
+      <DeleteConfirmModal
+        isOpen={deleteCategoryModalOpen}
+        title="Hapus Kategori Kas?"
+        message={`Apakah Anda yakin ingin menghapus kategori "${categoryToDelete?.namaKategori}"?`}
+        onConfirm={handleConfirmDeleteCategory}
+        onCancel={() => {
+          setDeleteCategoryModalOpen(false);
+          setCategoryToDelete(null);
+        }}
+        loading={deletingCategory}
+      />
+
+      {/* Modal Konfirmasi Reset Cache & Data */}
+      <DeleteConfirmModal
+        isOpen={resetModalOpen}
+        title="Bersihkan Cache & Reset Data Awal?"
+        message="Tindakan ini akan mengosongkan seluruh data simulasi pengujian dan membersihkan cache browser Anda sehingga aplikasi kembali bersih ke kondisi awal."
+        onConfirm={handleConfirmReset}
+        onCancel={() => setResetModalOpen(false)}
+        loading={resetting}
+      />
     </div>
   );
 }
