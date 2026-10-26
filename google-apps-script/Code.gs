@@ -437,10 +437,21 @@ function handleUpdateSubsidi(ss, item) {
 
   const values = sheet.getRange(1, 1, lastRow, sheet.getLastColumn()).getValues();
   const headers = values[0];
-  const idColIndex = headers.indexOf('id');
+  let idColIndex = -1;
+  for (let c = 0; c < headers.length; c++) {
+    const colName = String(headers[c] || '').trim().toLowerCase();
+    if (colName === 'id' || colName === 'kode' || colName.includes('id')) {
+      idColIndex = c;
+      break;
+    }
+  }
+  if (idColIndex === -1) idColIndex = 0;
+
+  const targetId = String(id).trim().toLowerCase();
 
   for (let r = 1; r < values.length; r++) {
-    if (values[r][idColIndex] === id) {
+    const cellId = String(values[r][idColIndex] || '').trim().toLowerCase();
+    if (cellId === targetId) {
       const now = new Date().toISOString();
       const nominal = item.nominal !== undefined ? Number(item.nominal) : Number(values[r][headers.indexOf('nominal')]);
 
@@ -480,10 +491,22 @@ function handleDeleteSubsidi(ss, id) {
   if (lastRow <= 1) return { success: false, error: 'Data kosong.' };
 
   const values = sheet.getRange(1, 1, lastRow, sheet.getLastColumn()).getValues();
-  const idColIndex = values[0].indexOf('id');
+  const headers = values[0];
+  let idColIndex = -1;
+  for (let c = 0; c < headers.length; c++) {
+    const colName = String(headers[c] || '').trim().toLowerCase();
+    if (colName === 'id' || colName === 'kode' || colName.includes('id')) {
+      idColIndex = c;
+      break;
+    }
+  }
+  if (idColIndex === -1) idColIndex = 0;
+
+  const targetId = String(id).trim().toLowerCase();
 
   for (let r = 1; r < values.length; r++) {
-    if (values[r][idColIndex] === id) {
+    const cellId = String(values[r][idColIndex] || '').trim().toLowerCase();
+    if (cellId === targetId) {
       sheet.deleteRow(r + 1);
       return { success: true, message: 'Subsidi berhasil dihapus.', id: id };
     }

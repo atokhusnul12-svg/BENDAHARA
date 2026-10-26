@@ -374,9 +374,9 @@ export async function getAllData(): Promise<{
             const kat = String(s.kategoriNama || '').toLowerCase();
             return !cat.includes('[dihapus]') && !kat.includes('tes');
           })
-          .map((s: any) => ({
+          .map((s: any, idx: number) => ({
             ...s,
-            id: String(s.id || ''),
+            id: s.id && String(s.id).trim() ? String(s.id).trim() : `SUB-LEGACY-${idx + 1}-${String(s.tanggalTransaksi || '').replace(/-/g, '')}`,
             bulanHijriah: String(s.bulanHijriah || ''),
             tahunHijriah: String(s.tahunHijriah || ''),
             periodeId: String(s.periodeId || ''),
@@ -811,21 +811,29 @@ export async function deleteSubsidi(id: string): Promise<{
   success: boolean;
   error?: string;
 }> {
-  if (!id) return { success: false, error: 'ID subsidi wajib ada.' };
+  const targetId = String(id || '').trim();
+  if (!targetId) return { success: false, error: 'ID subsidi wajib ada.' };
 
   const scriptUrl = process.env.GOOGLE_SCRIPT_URL?.trim();
   let remoteDeleted = false;
   if (scriptUrl) {
-    const remote = await callGoogleAppsScript('deleteSubsidi', { id });
-    if (!remote.success) {
-      return { success: false, error: remote.error || 'Gagal menghapus subsidi dari Google Sheets.' };
+    const remote = await callGoogleAppsScript('deleteSubsidi', { id: targetId });
+    if (remote.success) {
+      remoteDeleted = true;
+    } else {
+      // Soft-delete fallback jika Apps Script belum di-redeploy atau ID tidak cocok persis
+      const fallback = await callGoogleAppsScript('updateSubsidi', {
+        data: { id: targetId, catatan: '[Dihapus] ' + targetId, nominal: 0 },
+      }).catch(() => null);
+      if (fallback?.success) {
+        remoteDeleted = true;
+      }
     }
-    remoteDeleted = true;
   }
 
   const localDb = ensureLocalDb();
   const initialLen = localDb.subsidi.length;
-  localDb.subsidi = localDb.subsidi.filter(s => s.id !== id);
+  localDb.subsidi = localDb.subsidi.filter(s => String(s.id || '').trim() !== targetId);
   const localDeleted = localDb.subsidi.length < initialLen;
   if (localDeleted) {
     saveLocalDb(localDb);

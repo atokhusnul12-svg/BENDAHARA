@@ -40,8 +40,9 @@ export default function SubsidiPage() {
   const handleConfirmDelete = async () => {
     if (!subsidyToDelete) return;
     setDeleting(true);
+    const targetId = String(subsidyToDelete.id || '').trim();
     try {
-      const res = await fetch(`/api/subsidi?id=${subsidyToDelete.id}`, {
+      const res = await fetch(`/api/subsidi?id=${encodeURIComponent(targetId)}`, {
         method: 'DELETE',
       });
       const json = await res.json();
@@ -52,7 +53,8 @@ export default function SubsidiPage() {
       setDeleteModalOpen(false);
       setSubsidyToDelete(null);
     } catch (err: any) {
-      showToast('Gagal menghapus', err.message, 'error');
+      console.error('[Hapus Subsidi Error]:', err);
+      showToast('Gagal menghapus subsidi', err.message, 'error');
     } finally {
       setDeleting(false);
     }
