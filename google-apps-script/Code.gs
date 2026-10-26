@@ -373,26 +373,68 @@ function handleUpdatePengeluaran(ss, item) {
 }
 
 /**
- * 3. Hapus Pengeluaran
+ * Fungsi Bersama: Hapus baris berdasarkan ID unik (Case-Insensitive, Backup Scan, Flush, Invalidate Cache)
  */
-function handleDeletePengeluaran(ss, id) {
-  const sheet = ss.getSheetByName('Pengeluaran');
-  if (!id) return { success: false, error: 'ID transaksi pengeluaran wajib ada.' };
+function deleteRowById(ss, sheetName, id) {
+  const sheet = ss.getSheetByName(sheetName);
+  if (!sheet) return { success: false, error: 'Sheet "' + sheetName + '" tidak ditemukan.' };
+  if (!id) return { success: false, error: 'ID wajib ada untuk menghapus data ' + sheetName + '.' };
 
   const lastRow = sheet.getLastRow();
-  if (lastRow <= 1) return { success: false, error: 'Data kosong.' };
+  if (lastRow <= 1) return { success: false, error: 'Data ' + sheetName + ' kosong.' };
 
   const values = sheet.getRange(1, 1, lastRow, sheet.getLastColumn()).getValues();
-  const idColIndex = values[0].indexOf('id');
+  const headers = values[0];
+  let idColIndex = -1;
+  for (let c = 0; c < headers.length; c++) {
+    const colName = String(headers[c] || '').trim().toLowerCase();
+    if (colName === 'id' || colName === 'kode' || colName.includes('id')) {
+      idColIndex = c;
+      break;
+    }
+  }
+  if (idColIndex === -1) idColIndex = 0;
 
+  const targetId = String(id).trim().toLowerCase();
+
+  // 1. Pencarian utama pada kolom ID terdeteksi
   for (let r = 1; r < values.length; r++) {
-    if (values[r][idColIndex] === id) {
+    const cellId = String(values[r][idColIndex] || '').trim().toLowerCase();
+    if (cellId === targetId) {
       sheet.deleteRow(r + 1);
-      return { success: true, message: 'Pengeluaran berhasil dihapus.', id: id };
+      SpreadsheetApp.flush();
+      try {
+        var cache = CacheService.getScriptCache();
+        if (cache) cache.removeAll(['all_data', 'subsidi_data', 'pengeluaran_data', 'data']);
+      } catch (e) {}
+      return { success: true, message: sheetName + ' berhasil dihapus.', id: id };
     }
   }
 
-  return { success: false, error: 'Transaksi dengan ID ' + id + ' tidak ditemukan.' };
+  // 2. Backup: pencarian menyeluruh di semua kolom jika posisi kolom bergeser
+  for (let r = 1; r < values.length; r++) {
+    for (let c = 0; c < values[r].length; c++) {
+      const cellVal = String(values[r][c] || '').trim().toLowerCase();
+      if (cellVal === targetId) {
+        sheet.deleteRow(r + 1);
+        SpreadsheetApp.flush();
+        try {
+          var cache = CacheService.getScriptCache();
+          if (cache) cache.removeAll(['all_data', 'subsidi_data', 'pengeluaran_data', 'data']);
+        } catch (e) {}
+        return { success: true, message: sheetName + ' berhasil dihapus.', id: id };
+      }
+    }
+  }
+
+  return { success: false, error: 'Data ' + sheetName + ' dengan ID ' + id + ' tidak ditemukan.' };
+}
+
+/**
+ * 3. Hapus Pengeluaran
+ */
+function handleDeletePengeluaran(ss, id) {
+  return deleteRowById(ss, 'Pengeluaran', id);
 }
 
 /**
@@ -485,56 +527,7 @@ function handleUpdateSubsidi(ss, item) {
  * 6. Hapus Subsidi
  */
 function handleDeleteSubsidi(ss, id) {
-  const sheet = ss.getSheetByName('Subsidi');
-  if (!id) return { success: false, error: 'ID subsidi wajib ada.' };
-
-  const lastRow = sheet.getLastRow();
-  if (lastRow <= 1) return { success: false, error: 'Data kosong.' };
-
-  const values = sheet.getRange(1, 1, lastRow, sheet.getLastColumn()).getValues();
-  const headers = values[0];
-  let idColIndex = -1;
-  for (let c = 0; c < headers.length; c++) {
-    const colName = String(headers[c] || '').trim().toLowerCase();
-    if (colName === 'id' || colName === 'kode' || colName.includes('id')) {
-      idColIndex = c;
-      break;
-    }
-  }
-  if (idColIndex === -1) idColIndex = 0;
-
-  const targetId = String(id).trim().toLowerCase();
-
-  for (let r = 1; r < values.length; r++) {
-    const cellId = String(values[r][idColIndex] || '').trim().toLowerCase();
-    if (cellId === targetId) {
-      sheet.deleteRow(r + 1);
-      SpreadsheetApp.flush();
-      try {
-        var cache = CacheService.getScriptCache();
-        if (cache) cache.removeAll(['all_data', 'subsidi_data', 'data']);
-      } catch (e) {}
-      return { success: true, message: 'Subsidi berhasil dihapus.', id: id };
-    }
-  }
-
-  // Backup pencarian di seluruh kolom jika posisi kolom ID berubah
-  for (let r = 1; r < values.length; r++) {
-    for (let c = 0; c < values[r].length; c++) {
-      const cellVal = String(values[r][c] || '').trim().toLowerCase();
-      if (cellVal === targetId) {
-        sheet.deleteRow(r + 1);
-        SpreadsheetApp.flush();
-        try {
-          var cache = CacheService.getScriptCache();
-          if (cache) cache.removeAll(['all_data', 'subsidi_data', 'data']);
-        } catch (e) {}
-        return { success: true, message: 'Subsidi berhasil dihapus.', id: id };
-      }
-    }
-  }
-
-  return { success: false, error: 'Catatan subsidi tidak ditemukan.' };
+  return deleteRowById(ss, 'Subsidi', id);
 }
 
 /**
@@ -696,47 +689,13 @@ function handleUpdateKategori(ss, item) {
  * 11. Hapus Periode
  */
 function handleDeletePeriode(ss, id) {
-  const sheet = ss.getSheetByName('Periode');
-  if (!id) return { success: false, error: 'ID periode wajib ada.' };
-
-  const lastRow = sheet.getLastRow();
-  if (lastRow <= 1) return { success: false, error: 'Data kosong.' };
-
-  const values = sheet.getRange(1, 1, lastRow, sheet.getLastColumn()).getValues();
-  const headers = values[0];
-  const idColIndex = headers.indexOf('id');
-
-  for (let r = 1; r < values.length; r++) {
-    if (values[r][idColIndex] === id) {
-      sheet.deleteRow(r + 1);
-      return { success: true, message: 'Periode berhasil dihapus.' };
-    }
-  }
-
-  return { success: false, error: 'Periode tidak ditemukan.' };
+  return deleteRowById(ss, 'Periode', id);
 }
 
 /**
  * 12. Hapus Kategori
  */
 function handleDeleteKategori(ss, id) {
-  const sheet = ss.getSheetByName('Kategori');
-  if (!id) return { success: false, error: 'ID kategori wajib ada.' };
-
-  const lastRow = sheet.getLastRow();
-  if (lastRow <= 1) return { success: false, error: 'Data kosong.' };
-
-  const values = sheet.getRange(1, 1, lastRow, sheet.getLastColumn()).getValues();
-  const headers = values[0];
-  const idColIndex = headers.indexOf('id');
-
-  for (let r = 1; r < values.length; r++) {
-    if (values[r][idColIndex] === id) {
-      sheet.deleteRow(r + 1);
-      return { success: true, message: 'Kategori berhasil dihapus.' };
-    }
-  }
-
-  return { success: false, error: 'Kategori tidak ditemukan.' };
+  return deleteRowById(ss, 'Kategori', id);
 }
 

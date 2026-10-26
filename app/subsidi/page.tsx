@@ -18,7 +18,7 @@ export default function SubsidiPage() {
     showToast,
     summary,
     syncStatus,
-    removeSubsidiLocally,
+    deleteRecord,
   } = useApp();
 
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
@@ -42,33 +42,13 @@ export default function SubsidiPage() {
     if (!subsidyToDelete) return;
     setDeleting(true);
     const targetId = String(subsidyToDelete.id || '').trim();
-    console.log('[Hapus Subsidi] 1. Mengirim permintaan hapus ID:', targetId);
 
     try {
-      const res = await fetch(`/api/subsidi?id=${encodeURIComponent(targetId)}`, {
-        method: 'DELETE',
-        headers: { 'Cache-Control': 'no-cache' },
-      });
-      const json = await res.json();
-      console.log('[Hapus Subsidi] 2. Respons server:', json);
-
-      if (!res.ok || !json.success) {
-        throw new Error(json.error || 'Gagal menghapus subsidi.');
-      }
-
-      // Hapus dari state lokal & perbarui cache secara instan
-      console.log('[Hapus Subsidi] 3. Menghapus item dari state lokal dan localStorage');
-      removeSubsidiLocally(targetId);
-
-      // Render ulang dan sinkronkan data
-      await refreshData();
-      console.log('[Hapus Subsidi] 4. Berhasil memperbarui data dan ringkasan');
-
+      await deleteRecord('subsidi', targetId);
       showToast('Catatan subsidi berhasil dihapus', 'Saldo kas telah disesuaikan');
       setDeleteModalOpen(false);
       setSubsidyToDelete(null);
     } catch (err: any) {
-      console.error('[Hapus Subsidi] GAGAL:', err);
       showToast('Gagal menghapus subsidi', err.message || 'Terjadi kesalahan sistem.', 'error');
     } finally {
       setDeleting(false);

@@ -17,6 +17,7 @@ export default function LaporanPage() {
     refreshData,
     showToast,
     summary,
+    deleteRecord,
   } = useApp();
 
   const [activeKategori, setActiveKategori] = useState<string>('Semua');
@@ -83,19 +84,15 @@ export default function LaporanPage() {
   const handleConfirmDelete = async () => {
     if (!itemToDelete) return;
     setDeleting(true);
-    try {
-      const res = await fetch(`/api/pengeluaran?id=${itemToDelete.id}`, {
-        method: 'DELETE',
-      });
-      const json = await res.json();
-      if (!json.success) throw new Error(json.error || 'Gagal menghapus transaksi.');
+    const targetId = String(itemToDelete.id || '').trim();
 
-      await refreshData();
+    try {
+      await deleteRecord('pengeluaran', targetId);
       showToast('Transaksi berhasil dihapus', 'Saldo kas telah dihitung ulang');
       setDeleteModalOpen(false);
       setItemToDelete(null);
     } catch (err: any) {
-      showToast('Gagal menghapus', err.message, 'error');
+      showToast('Gagal menghapus transaksi', err.message || 'Terjadi kesalahan sistem.', 'error');
     } finally {
       setDeleting(false);
     }

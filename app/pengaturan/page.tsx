@@ -15,6 +15,7 @@ export default function PengaturanPage() {
     showToast,
     selectedPeriode,
     setSelectedPeriode,
+    deleteRecord,
   } = useApp();
 
   const [testingSync, setTestingSync] = useState(false);
@@ -188,11 +189,7 @@ export default function PengaturanPage() {
     if (!periodToDelete) return;
     setDeletingPeriod(true);
     try {
-      const res = await fetch(`/api/periode?id=${encodeURIComponent(periodToDelete.id)}`, {
-        method: 'DELETE',
-      });
-      const json = await res.json();
-      if (!json.success) throw new Error(json.error || 'Gagal menghapus periode.');
+      await deleteRecord('periode', periodToDelete.id);
 
       if (periodToDelete.labelPeriode === selectedPeriode) {
         const remaining = periode.filter(p => p.id !== periodToDelete.id);
@@ -201,12 +198,11 @@ export default function PengaturanPage() {
         }
       }
 
-      await refreshData();
       showToast('Periode Dihapus', `Periode "${periodToDelete.labelPeriode}" berhasil dihapus.`);
       setDeletePeriodModalOpen(false);
       setPeriodToDelete(null);
     } catch (err: any) {
-      showToast('Gagal Menghapus Periode', err.message, 'error');
+      showToast('Gagal Menghapus Periode', err.message || 'Terjadi kesalahan sistem.', 'error');
     } finally {
       setDeletingPeriod(false);
     }
@@ -225,18 +221,12 @@ export default function PengaturanPage() {
     if (!categoryToDelete) return;
     setDeletingCategory(true);
     try {
-      const res = await fetch(`/api/kategori?id=${encodeURIComponent(categoryToDelete.id)}`, {
-        method: 'DELETE',
-      });
-      const json = await res.json();
-      if (!json.success) throw new Error(json.error || 'Gagal menghapus kategori.');
-
-      await refreshData();
+      await deleteRecord('kategori', categoryToDelete.id);
       showToast('Kategori Dihapus', `Kategori "${categoryToDelete.namaKategori}" berhasil dihapus.`);
       setDeleteCategoryModalOpen(false);
       setCategoryToDelete(null);
     } catch (err: any) {
-      showToast('Gagal Menghapus Kategori', err.message, 'error');
+      showToast('Gagal Menghapus Kategori', err.message || 'Terjadi kesalahan sistem.', 'error');
     } finally {
       setDeletingCategory(false);
     }

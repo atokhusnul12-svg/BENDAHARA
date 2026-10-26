@@ -99,14 +99,16 @@ let inMemoryDb: AppDatabase = {
   },
 };
 
-// Set penanda ID subsidi yang dihapus (mencegah resurrection dari Sheets sebelum sinkronisasi tuntas)
+// Set penanda ID subsidi & pengeluaran yang dihapus (mencegah resurrection dari Sheets sebelum sinkronisasi tuntas)
 const pendingDeletedSubsidiIds = new Set<string>();
+const pendingDeletedPengeluaranIds = new Set<string>();
 
 /**
  * Reset memory DB khusus untuk pengujian otomatis (test runner)
  */
 export function resetLocalDbForTesting(): void {
   pendingDeletedSubsidiIds.clear();
+  pendingDeletedPengeluaranIds.clear();
   inMemoryDb = {
     pengeluaran: [],
     subsidi: [],
@@ -130,6 +132,7 @@ export function resetLocalDbForTesting(): void {
  */
 export function resetToCleanState(): AppDatabase {
   pendingDeletedSubsidiIds.clear();
+  pendingDeletedPengeluaranIds.clear();
   inMemoryDb = {
     pengeluaran: [],
     subsidi: [],
@@ -352,24 +355,31 @@ export async function getAllData(): Promise<{
     if (remote.success) {
       // Sinkronkan data dari Google Sheets ke penyimpanan lokal sebagai cache
       if (Array.isArray(remote.pengeluaran)) {
-        localDb.pengeluaran = remote.pengeluaran.map((p: any) => ({
-          ...p,
-          id: String(p.id || ''),
-          eventId: String(p.eventId || ''),
-          bulanHijriah: String(p.bulanHijriah || ''),
-          tahunHijriah: String(p.tahunHijriah || ''),
-          periodeId: String(p.periodeId || ''),
-          kategoriId: String(p.kategoriId || ''),
-          kategoriNama: String(p.kategoriNama || ''),
-          jenisAcara: String(p.jenisAcara || ''),
-          namaBarang: String(p.namaBarang || ''),
-          satuan: String(p.satuan || 'pcs'),
-          catatan: p.catatan ? String(p.catatan) : '',
-          jumlah: Number(p.jumlah) || 1,
-          hargaSatuan: Number(p.hargaSatuan) || 0,
-          total: Number(p.total) || ((Number(p.jumlah) || 1) * (Number(p.hargaSatuan) || 0)),
-          tanggalTransaksi: p.tanggalTransaksi ? String(p.tanggalTransaksi).split('T')[0] : '',
-        }));
+        localDb.pengeluaran = remote.pengeluaran
+          .filter((p: any) => {
+            const pid = String(p.id || '').trim();
+            const cat = String(p.catatan || '').toLowerCase();
+            const nama = String(p.namaBarang || '').toLowerCase();
+            return !pendingDeletedPengeluaranIds.has(pid) && !cat.includes('[dihapus]') && !nama.includes('[dihapus]');
+          })
+          .map((p: any, idx: number) => ({
+            ...p,
+            id: p.id && String(p.id).trim() ? String(p.id).trim() : `EXP-LEGACY-${idx + 1}-${String(p.tanggalTransaksi || '').replace(/-/g, '')}`,
+            eventId: String(p.eventId || ''),
+            bulanHijriah: String(p.bulanHijriah || ''),
+            tahunHijriah: String(p.tahunHijriah || ''),
+            periodeId: String(p.periodeId || ''),
+            kategoriId: String(p.kategoriId || ''),
+            kategoriNama: String(p.kategoriNama || ''),
+            jenisAcara: String(p.jenisAcara || ''),
+            namaBarang: String(p.namaBarang || ''),
+            satuan: String(p.satuan || 'pcs'),
+            catatan: p.catatan ? String(p.catatan) : '',
+            jumlah: Number(p.jumlah) || 1,
+            hargaSatuan: Number(p.hargaSatuan) || 0,
+            total: Number(p.total) || ((Number(p.jumlah) || 1) * (Number(p.hargaSatuan) || 0)),
+            tanggalTransaksi: p.tanggalTransaksi ? String(p.tanggalTransaksi).split('T')[0] : '',
+          }));
       }
 
       if (Array.isArray(remote.subsidi)) {
@@ -703,30 +713,40 @@ export async function updatePengeluaran(item: Partial<PengeluaranItem> & { id: s
  */
 export async function deletePengeluaran(id: string): Promise<{
   success: boolean;
+  fromSheets?: boolean;
   error?: string;
 }> {
-  if (!id) return { success: false, error: 'ID transaksi pengeluaran wajib ada.' };
+  const targetId = String(id || '').trim();
+  if (!targetId) return { success: false, error: 'ID transaksi pengeluaran wajib ada.' };
 
   const scriptUrl = process.env.GOOGLE_SCRIPT_URL?.trim();
   let remoteDeleted = false;
   if (scriptUrl) {
-    const remote = await callGoogleAppsScript('deletePengeluaran', { id });
-    if (!remote.success) {
-      return { success: false, error: remote.error || 'Gagal menghapus transaksi dari Google Sheets.' };
+    const remote = await callGoogleAppsScript('deletePengeluaran', { id: targetId });
+    if (remote.success) {
+      remoteDeleted = true;
+    } else {
+      // Soft-delete fallback jika Apps Script belum di-redeploy atau ID tidak cocok persis
+      const fallback = await callGoogleAppsScript('updatePengeluaran', {
+        data: { id: targetId, catatan: '[Dihapus] ' + targetId, namaBarang: '[Dihapus]', jumlah: 0, hargaSatuan: 0, total: 0 },
+      }).catch(() => null);
+      if (fallback?.success) {
+        remoteDeleted = true;
+      }
     }
-    remoteDeleted = true;
   }
 
   const localDb = ensureLocalDb();
   const initialLen = localDb.pengeluaran.length;
-  localDb.pengeluaran = localDb.pengeluaran.filter(p => p.id !== id);
+  localDb.pengeluaran = localDb.pengeluaran.filter(p => String(p.id || '').trim() !== targetId);
   const localDeleted = localDb.pengeluaran.length < initialLen;
   if (localDeleted) {
     saveLocalDb(localDb);
   }
 
   if (remoteDeleted || localDeleted) {
-    return { success: true };
+    pendingDeletedPengeluaranIds.add(targetId);
+    return { success: true, fromSheets: remoteDeleted };
   }
 
   return { success: false, error: 'Transaksi tidak ditemukan.' };
@@ -825,9 +845,6 @@ export async function deleteSubsidi(id: string): Promise<{
   const targetId = String(id || '').trim();
   if (!targetId) return { success: false, error: 'ID subsidi wajib ada.' };
 
-  // Tandai sebagai pending delete agar tidak muncul saat sync berikutnya
-  pendingDeletedSubsidiIds.add(targetId);
-
   const scriptUrl = process.env.GOOGLE_SCRIPT_URL?.trim();
   let remoteDeleted = false;
   if (scriptUrl) {
@@ -853,7 +870,8 @@ export async function deleteSubsidi(id: string): Promise<{
     saveLocalDb(localDb);
   }
 
-  if (remoteDeleted || localDeleted || pendingDeletedSubsidiIds.has(targetId)) {
+  if (remoteDeleted || localDeleted) {
+    pendingDeletedSubsidiIds.add(targetId);
     return { success: true, fromSheets: remoteDeleted };
   }
 

@@ -42,6 +42,7 @@ interface AppContextType {
   openSubsidyModal: (subsidy?: SubsidiItem) => void;
   closeSubsidyModal: () => void;
   removeSubsidiLocally: (id: string) => void;
+  deleteRecord: (type: 'subsidi' | 'pengeluaran' | 'periode' | 'kategori', id: string) => Promise<boolean>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -53,8 +54,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [pengeluaran, setPengeluaran] = useState<PengeluaranItem[]>(() => {
     if (typeof window !== 'undefined') {
       try {
+        const pendingStr = localStorage.getItem('mmd_pending_deleted_pengeluaran');
+        const pending: string[] = pendingStr ? JSON.parse(pendingStr) : [];
         const cached = localStorage.getItem('mmd_offline_cache');
-        if (cached) return JSON.parse(cached).pengeluaran || [];
+        if (cached) {
+          const list: PengeluaranItem[] = JSON.parse(cached).pengeluaran || [];
+          return list.filter(p => !pending.includes(String(p.id).trim()));
+        }
       } catch (e) {}
     }
     return [];
@@ -169,84 +175,188 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setIsSubsidyModalOpen(false);
   };
 
-  const removeSubsidiLocally = useCallback((id: string) => {
-    const targetId = String(id || '').trim();
-    if (!targetId) return;
-
+  const saveToOfflineCache = (field: 'subsidi' | 'pengeluaran' | 'periode' | 'kategori', data: any) => {
     if (typeof window !== 'undefined') {
       try {
-        const pendingStr = localStorage.getItem('mmd_pending_deleted_subsidi');
-        const pending: string[] = pendingStr ? JSON.parse(pendingStr) : [];
-        if (!pending.includes(targetId)) {
-          pending.push(targetId);
-          localStorage.setItem('mmd_pending_deleted_subsidi', JSON.stringify(pending));
+        const cachedStr = localStorage.getItem('mmd_offline_cache');
+        const cached = cachedStr ? JSON.parse(cachedStr) : {};
+        cached[field] = data;
+        localStorage.setItem('mmd_offline_cache', JSON.stringify(cached));
+      } catch (e) {}
+    }
+  };
+
+  const deleteRecord = useCallback(async (
+    type: 'subsidi' | 'pengeluaran' | 'periode' | 'kategori',
+    id: string
+  ): Promise<boolean> => {
+    const targetId = String(id || '').trim();
+    if (!targetId) {
+      throw new Error(`ID ${type} tidak valid.`);
+    }
+
+    console.log(`[deleteRecord] 1. Mengirim permintaan hapus ${type}:`, targetId);
+
+    // Kirim request ke endpoint API
+    const res = await fetch(`/api/${type}?id=${encodeURIComponent(targetId)}`, {
+      method: 'DELETE',
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        Pragma: 'no-cache',
+      },
+    });
+
+    const json = await res.json().catch(() => ({ success: false, error: 'Gagal memproses respons server.' }));
+    console.log(`[deleteRecord] 2. Respons server:`, json);
+
+    if (!res.ok || !json.success) {
+      console.error(`[deleteRecord] GAGAL menghapus ${type}:`, json?.error);
+      throw new Error(json?.error || `Gagal menghapus data ${type}.`);
+    }
+
+    console.log(`[deleteRecord] 3. Menghapus item dari state lokal & memperbarui localStorage`);
+
+    // Catat ke pending deleted di localStorage agar tidak kembali saat sync
+    if (typeof window !== 'undefined') {
+      try {
+        const key = `mmd_pending_deleted_${type}`;
+        const pStr = localStorage.getItem(key);
+        const pList: string[] = pStr ? JSON.parse(pStr) : [];
+        if (!pList.includes(targetId)) {
+          pList.push(targetId);
+          localStorage.setItem(key, JSON.stringify(pList));
         }
       } catch (e) {}
     }
 
-    setSubsidi(prev => {
-      const deletedItem = prev.find(s => String(s.id || '').trim() === targetId);
-      const updated = prev.filter(s => String(s.id || '').trim() !== targetId);
+    // Mutasi state lokal seketika & update summary
+    if (type === 'subsidi') {
+      setSubsidi(prev => {
+        const deletedItem = prev.find(s => String(s.id || '').trim() === targetId);
+        const updated = prev.filter(s => String(s.id || '').trim() !== targetId);
 
-      if (deletedItem) {
-        const nominal = Number(deletedItem.nominal) || 0;
-        setSummary(prevSum => {
-          if (!prevSum) return null;
-          const newTotalSub = Math.max(0, prevSum.totalSubsidi - nominal);
-          const newSaldo = newTotalSub - prevSum.totalPengeluaran;
-          const newPct = newTotalSub > 0 ? Math.round((prevSum.totalPengeluaran / newTotalSub) * 1000) / 10 : 0;
-          return {
-            ...prevSum,
-            totalSubsidi: newTotalSub,
-            saldoTersisa: newSaldo,
-            persentasePenggunaan: newPct,
-            categories: (prevSum.categories || []).map(cat => {
-              if (
-                cat.kategoriNama === deletedItem.kategoriNama ||
-                cat.kategoriId === deletedItem.kategoriId
-              ) {
-                const sub = Math.max(0, cat.totalSubsidi - nominal);
-                const sisa = sub - cat.totalPengeluaran;
-                const pct = sub > 0 ? Math.round((cat.totalPengeluaran / sub) * 1000) / 10 : 0;
-                return {
-                  ...cat,
-                  totalSubsidi: sub,
-                  saldoTersisa: sisa,
-                  persentasePenggunaan: pct,
-                };
-              }
-              return cat;
-            }),
-          };
-        });
-      }
+        if (deletedItem) {
+          const nominal = Number(deletedItem.nominal) || 0;
+          setSummary(prevSum => {
+            if (!prevSum) return null;
+            const newTotalSub = Math.max(0, prevSum.totalSubsidi - nominal);
+            const newSaldo = newTotalSub - prevSum.totalPengeluaran;
+            const newPct = newTotalSub > 0 ? Math.round((prevSum.totalPengeluaran / newTotalSub) * 1000) / 10 : 0;
+            return {
+              ...prevSum,
+              totalSubsidi: newTotalSub,
+              saldoTersisa: newSaldo,
+              persentasePenggunaan: newPct,
+              categories: (prevSum.categories || []).map(cat => {
+                if (
+                  cat.kategoriNama === deletedItem.kategoriNama ||
+                  cat.kategoriId === deletedItem.kategoriId
+                ) {
+                  const sub = Math.max(0, cat.totalSubsidi - nominal);
+                  const sisa = sub - cat.totalPengeluaran;
+                  const pct = sub > 0 ? Math.round((cat.totalPengeluaran / sub) * 1000) / 10 : 0;
+                  return {
+                    ...cat,
+                    totalSubsidi: sub,
+                    saldoTersisa: sisa,
+                    persentasePenggunaan: pct,
+                  };
+                }
+                return cat;
+              }),
+            };
+          });
+        }
 
-      if (typeof window !== 'undefined') {
-        try {
-          const cachedStr = localStorage.getItem('mmd_offline_cache');
-          if (cachedStr) {
-            const cached = JSON.parse(cachedStr);
-            cached.subsidi = updated;
-            localStorage.setItem('mmd_offline_cache', JSON.stringify(cached));
-          }
-        } catch (e) {}
-      }
-      return updated;
-    });
+        saveToOfflineCache('subsidi', updated);
+        return updated;
+      });
+    } else if (type === 'pengeluaran') {
+      setPengeluaran(prev => {
+        const deletedItem = prev.find(p => String(p.id || '').trim() === targetId);
+        const updated = prev.filter(p => String(p.id || '').trim() !== targetId);
+
+        if (deletedItem) {
+          const totalVal = Number(deletedItem.total) || ((Number(deletedItem.jumlah) || 1) * (Number(deletedItem.hargaSatuan) || 0));
+          setSummary(prevSum => {
+            if (!prevSum) return null;
+            const newTotalPengeluaran = Math.max(0, prevSum.totalPengeluaran - totalVal);
+            const newSaldo = prevSum.totalSubsidi - newTotalPengeluaran;
+            const newPct = prevSum.totalSubsidi > 0 ? Math.round((newTotalPengeluaran / prevSum.totalSubsidi) * 1000) / 10 : 0;
+            return {
+              ...prevSum,
+              totalPengeluaran: newTotalPengeluaran,
+              saldoTersisa: newSaldo,
+              persentasePenggunaan: newPct,
+              categories: (prevSum.categories || []).map(cat => {
+                if (
+                  cat.kategoriNama === deletedItem.kategoriNama ||
+                  cat.kategoriId === deletedItem.kategoriId
+                ) {
+                  const kel = Math.max(0, cat.totalPengeluaran - totalVal);
+                  const sisa = cat.totalSubsidi - kel;
+                  const pct = cat.totalSubsidi > 0 ? Math.round((kel / cat.totalSubsidi) * 1000) / 10 : 0;
+                  return {
+                    ...cat,
+                    totalPengeluaran: kel,
+                    saldoTersisa: sisa,
+                    persentasePenggunaan: pct,
+                    jumlahTransaksi: Math.max(0, (cat.jumlahTransaksi || 1) - 1),
+                  };
+                }
+                return cat;
+              }),
+            };
+          });
+        }
+
+        saveToOfflineCache('pengeluaran', updated);
+        return updated;
+      });
+    } else if (type === 'periode') {
+      setPeriode(prev => {
+        const updated = prev.filter(p => String(p.id || '').trim() !== targetId);
+        saveToOfflineCache('periode', updated);
+        return updated;
+      });
+    } else if (type === 'kategori') {
+      setKategori(prev => {
+        const updated = prev.filter(k => String(k.id || '').trim() !== targetId);
+        saveToOfflineCache('kategori', updated);
+        return updated;
+      });
+    }
+
+    // Refresh data untuk memastikan sinkronisasi menyeluruh dengan server
+    await refreshData();
+    console.log(`[deleteRecord] 4. Berhasil memperbarui data dan render ulang untuk ${type}`);
+    return true;
   }, []);
+
+  const removeSubsidiLocally = useCallback((id: string) => {
+    deleteRecord('subsidi', id).catch(() => {});
+  }, [deleteRecord]);
 
   const refreshData = useCallback(async () => {
     try {
       setLoading(true);
 
-      // Sinkronkan pending deleted subsidi jika ada
+      // Sinkronkan pending deleted subsidi & pengeluaran jika ada
       if (typeof window !== 'undefined') {
         try {
-          const pendingStr = localStorage.getItem('mmd_pending_deleted_subsidi');
-          const pending: string[] = pendingStr ? JSON.parse(pendingStr) : [];
-          if (pending.length > 0) {
-            for (const pid of pending) {
+          const pendingSubStr = localStorage.getItem('mmd_pending_deleted_subsidi');
+          const pendingSub: string[] = pendingSubStr ? JSON.parse(pendingSubStr) : [];
+          if (pendingSub.length > 0) {
+            for (const pid of pendingSub) {
               fetch(`/api/subsidi?id=${encodeURIComponent(pid)}`, { method: 'DELETE' }).catch(() => {});
+            }
+          }
+
+          const pendingExpStr = localStorage.getItem('mmd_pending_deleted_pengeluaran');
+          const pendingExp: string[] = pendingExpStr ? JSON.parse(pendingExpStr) : [];
+          if (pendingExp.length > 0) {
+            for (const pid of pendingExp) {
+              fetch(`/api/pengeluaran?id=${encodeURIComponent(pid)}`, { method: 'DELETE' }).catch(() => {});
             }
           }
         } catch (e) {}
@@ -266,19 +376,26 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const json = await res.json();
 
       if (json.success && json.data) {
-        let pendingList: string[] = [];
+        let pendingSubsidiList: string[] = [];
+        let pendingPengeluaranList: string[] = [];
         if (typeof window !== 'undefined') {
           try {
-            const pStr = localStorage.getItem('mmd_pending_deleted_subsidi');
-            if (pStr) pendingList = JSON.parse(pStr);
+            const pSubStr = localStorage.getItem('mmd_pending_deleted_subsidi');
+            if (pSubStr) pendingSubsidiList = JSON.parse(pSubStr);
+            const pExpStr = localStorage.getItem('mmd_pending_deleted_pengeluaran');
+            if (pExpStr) pendingPengeluaranList = JSON.parse(pExpStr);
           } catch (e) {}
         }
 
         const cleanSubsidi = (json.data.subsidi || []).filter(
-          (s: any) => !pendingList.includes(String(s.id || '').trim())
+          (s: any) => !pendingSubsidiList.includes(String(s.id || '').trim())
         );
 
-        setPengeluaran(json.data.pengeluaran || []);
+        const cleanPengeluaran = (json.data.pengeluaran || []).filter(
+          (p: any) => !pendingPengeluaranList.includes(String(p.id || '').trim())
+        );
+
+        setPengeluaran(cleanPengeluaran);
         setSubsidi(cleanSubsidi);
         setPeriode(json.data.periode || []);
         setKategori(json.data.kategori || []);
@@ -289,7 +406,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (typeof window !== 'undefined') {
           try {
             localStorage.setItem('mmd_offline_cache', JSON.stringify({
-              pengeluaran: json.data.pengeluaran || [],
+              pengeluaran: cleanPengeluaran,
               subsidi: cleanSubsidi,
               periode: json.data.periode || [],
               kategori: json.data.kategori || [],
@@ -391,6 +508,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         openSubsidyModal,
         closeSubsidyModal,
         removeSubsidiLocally,
+        deleteRecord,
       }}
     >
       {children}
