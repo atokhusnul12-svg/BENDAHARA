@@ -24,8 +24,6 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
   viewportFit: 'cover',
 };
 
@@ -43,7 +41,7 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
         <link
-          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap"
           rel="stylesheet"
         />
         <link
@@ -54,7 +52,7 @@ export default function RootLayout({
       <body className="bg-surface font-body-md text-body-md text-on-surface antialiased flex flex-col min-h-screen">
         <AppProvider>
           <Header />
-          <main className="flex-1 flex flex-col relative w-full max-w-[480px] mx-auto px-margin pt-16 pb-28 bg-surface">
+          <main className="flex-1 flex flex-col relative w-full max-w-[480px] mx-auto px-margin pt-16 pb-32 bg-surface">
             {children}
           </main>
           <BottomNav />

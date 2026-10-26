@@ -39,19 +39,31 @@ export default function BottomNav() {
             <Link
               key={item.path}
               href={item.path}
-              className={`flex flex-col items-center justify-center gap-space-xs min-w-[56px] min-h-[44px] transition-colors active:scale-95 ${
+              className={`flex flex-col items-center justify-center gap-1 min-w-[64px] min-h-[48px] px-2 py-1 transition-all group ${
                 isActive
-                  ? 'text-primary font-bold'
+                  ? 'text-primary'
                   : 'text-on-surface-variant hover:text-primary'
               }`}
             >
-              <span
-                className="material-symbols-outlined text-[24px]"
-                style={isActive ? { fontVariationSettings: "'FILL' 1" } : undefined}
+              <div
+                className={`px-3.5 py-1 rounded-full transition-all duration-150 flex items-center justify-center ${
+                  isActive
+                    ? 'bg-primary/12 text-primary shadow-xs'
+                    : 'text-on-surface-variant group-hover:bg-surface-container-high/60 group-hover:text-primary'
+                }`}
               >
-                {item.icon}
+                <span
+                  className="material-symbols-outlined text-[22px]"
+                  style={isActive ? { fontVariationSettings: "'FILL' 1" } : undefined}
+                >
+                  {item.icon}
+                </span>
+              </div>
+              <span className={`font-label-sm text-[11px] leading-tight font-medium tracking-tight ${
+                isActive ? 'text-primary' : 'text-on-surface-variant'
+              }`}>
+                {item.label}
               </span>
-              <span className="font-label-sm text-label-sm leading-none">{item.label}</span>
             </Link>
           );
         })}

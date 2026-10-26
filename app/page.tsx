@@ -43,7 +43,7 @@ export default function HomePage() {
           {/* Periode Dropdown Trigger */}
           <div className="relative">
             <button
-              className="flex items-center gap-space-xs px-3 py-1.5 bg-surface-container-lowest rounded-full shadow-sm hover:bg-surface-container-low transition-colors text-on-surface border border-surface-container"
+              className="flex items-center gap-space-xs px-3.5 py-2 min-h-[42px] bg-surface-container-lowest rounded-full shadow-sm hover:bg-surface-container-low transition-colors text-on-surface border border-surface-container active:scale-[0.98]"
               onClick={() => setPeriodDropdownOpen(!periodDropdownOpen)}
               type="button"
             >
@@ -102,10 +102,10 @@ export default function HomePage() {
 
           {/* Actual Sync Status Pill */}
           <div
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full shadow-sm flex-shrink-0 text-xs font-semibold ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 min-h-[38px] rounded-full shadow-xs flex-shrink-0 text-xs font-semibold ${
               syncStatus?.connected
-                ? 'bg-tertiary-fixed/40 text-tertiary'
-                : 'bg-amber-100 text-amber-800'
+                ? 'bg-emerald-50 text-emerald-800 border border-emerald-200/80'
+                : 'bg-amber-50 text-amber-900 border border-amber-200/80'
             }`}
             title={syncStatus?.error || 'Status sinkronisasi server'}
           >
@@ -115,7 +115,7 @@ export default function HomePage() {
             >
               {syncStatus?.connected ? 'sync' : 'cloud_off'}
             </span>
-            <span className="font-label-sm text-label-sm truncate max-w-[120px]">
+            <span className="font-label-sm text-label-sm truncate max-w-[125px]">
               {syncStatus?.connected ? 'Sinkron Sheets' : 'Lokal (Belum Sync)'}
             </span>
           </div>
@@ -125,13 +125,13 @@ export default function HomePage() {
       {/* Section 2: 'Ringkasan Total' Hero Card */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary-container to-primary text-on-primary shadow-lg shadow-primary/10 p-5 mb-space-lg">
         {/* Subtle 8-Point Islamic Star / Hexagon Watermark Micro Pattern */}
-        <div className="absolute -right-6 -bottom-6 w-36 h-36 opacity-10 pointer-events-none text-secondary-fixed">
+        <div className="absolute -right-6 -bottom-6 w-36 h-36 opacity-[0.06] pointer-events-none text-secondary-fixed">
           <svg aria-hidden="true" className="w-full h-full fill-current" viewBox="0 0 100 100">
             <polygon points="50,0 65,35 100,50 65,65 50,100 35,65 0,50 35,35" />
             <polygon points="50,12 76,24 88,50 76,76 50,88 24,76 12,50 24,24" />
           </svg>
         </div>
-        <div className="absolute -right-12 -top-12 w-28 h-28 opacity-10 pointer-events-none text-secondary-fixed">
+        <div className="absolute -right-12 -top-12 w-28 h-28 opacity-[0.06] pointer-events-none text-secondary-fixed">
           <svg aria-hidden="true" className="w-full h-full fill-current" viewBox="0 0 100 100">
             <polygon points="50,0 65,35 100,50 65,65 50,100 35,65 0,50 35,35" />
           </svg>
@@ -143,57 +143,63 @@ export default function HomePage() {
             <span className="material-symbols-outlined text-[18px] text-secondary-fixed">
               shield_with_heart
             </span>
-            <span className="font-label-md text-label-md tracking-wider uppercase opacity-90 text-on-primary">
+            <span className="font-label-md text-label-md tracking-wider uppercase font-semibold text-white">
               Ringkasan Total Anggaran
             </span>
           </div>
-          <span className="px-2.5 py-0.5 rounded-full font-label-sm text-label-sm bg-secondary-container text-on-secondary-container font-bold">
+          <span className="px-2.5 py-0.5 rounded-full font-label-sm text-label-sm bg-secondary-fixed text-on-secondary-fixed font-bold shadow-xs">
             Amanah MMD
           </span>
         </div>
 
         {/* Sisa Subsidi Primary Display */}
-        <div className="mb-4 relative z-10">
-          <span className="font-label-sm text-label-sm opacity-80 block mb-0.5 text-on-primary">
-            Sisa Dana Kas Tersedia
+        <div className="mb-3.5 relative z-10">
+          <span className="font-label-sm text-xs text-white/90 block mb-1 font-medium">
+            Sisa Dana Kas<span className="sr-only"> Tersedia</span>
           </span>
-          <div className="flex items-baseline gap-1.5">
-            <span className="font-title-currency-lg text-title-currency-lg text-on-primary tracking-tight">
+          <div className="flex items-baseline gap-2">
+            <span className="font-title-currency-lg text-[28px] sm:text-[32px] text-white font-bold tracking-tight tabular-nums leading-none">
               {formatRupiah(saldoTersisa)}
             </span>
-            <span className="font-label-sm text-label-sm text-secondary-fixed font-semibold">
+            <span className={`px-2 py-0.5 rounded-full font-label-sm text-[11px] font-bold ${saldoTersisa >= 0 ? 'bg-secondary-fixed/90 text-on-secondary-fixed' : 'bg-error-container text-on-error-container'}`}>
               {saldoTersisa >= 0 ? 'Tersedia' : 'Defisit'}
             </span>
           </div>
         </div>
 
-        {/* Overall Linear Progress Bar */}
-        <div className="relative z-10 mb-4 bg-primary/40 rounded-full h-2 p-0.5 overflow-hidden">
-          <div
-            className="bg-secondary-fixed h-full rounded-full transition-all duration-500"
-            style={{ width: `${Math.min(100, Math.max(0, persentasePenggunaan))}%` }}
-          />
+        {/* Overall Linear Progress Bar with Companion Text */}
+        <div className="relative z-10 mb-4">
+          <div className="w-full bg-white/20 rounded-full h-2.5 p-0.5 overflow-hidden shadow-inner">
+            <div
+              className="bg-secondary-fixed-dim h-full rounded-full transition-all duration-500 shadow-xs"
+              style={{ width: `${Math.min(100, Math.max(0, persentasePenggunaan))}%` }}
+            />
+          </div>
+          <div className="flex items-center justify-between text-[11px] text-white/90 font-medium mt-1.5">
+            <span>Realisasi Anggaran</span>
+            <span className="tabular-nums font-semibold">{persentasePenggunaan}% terpakai</span>
+          </div>
         </div>
 
         {/* Stats Breakdown (Total Subsidi vs Total Pengeluaran) */}
-        <div className="grid grid-cols-2 gap-space-sm pt-3 bg-black/10 rounded-xl px-3 py-2.5 relative z-10">
+        <div className="grid grid-cols-2 gap-3 pt-3 bg-black/15 backdrop-blur-xs rounded-xl px-3.5 py-3 relative z-10 border border-white/10">
           <div className="flex flex-col">
-            <div className="flex items-center gap-1 opacity-75">
-              <span className="material-symbols-outlined text-[14px]">account_balance</span>
-              <span className="font-label-sm text-label-sm">Total Subsidi</span>
+            <div className="flex items-center gap-1.5 text-white/90">
+              <span className="material-symbols-outlined text-[15px]">account_balance</span>
+              <span className="font-label-sm text-xs font-medium">Total Subsidi</span>
             </div>
-            <span className="font-headline-md text-headline-md font-bold mt-0.5 text-on-primary">
+            <span className="font-headline-md text-base sm:text-lg font-bold mt-1 text-white tabular-nums tracking-tight">
               {formatRupiah(totalSubsidi)}
             </span>
           </div>
           <div className="flex flex-col">
-            <div className="flex items-center gap-1 opacity-75">
-              <span className="material-symbols-outlined text-[14px]">shopping_bag</span>
-              <span className="font-label-sm text-label-sm">
+            <div className="flex items-center gap-1.5 text-white/90">
+              <span className="material-symbols-outlined text-[15px]">shopping_bag</span>
+              <span className="font-label-sm text-xs font-medium">
                 Pengeluaran ({persentasePenggunaan}%)
               </span>
             </div>
-            <span className="font-headline-md text-headline-md font-bold mt-0.5 text-secondary-fixed">
+            <span className="font-headline-md text-base sm:text-lg font-bold mt-1 text-secondary-fixed tabular-nums tracking-tight">
               {formatRupiah(totalPengeluaran)}
             </span>
           </div>
@@ -201,22 +207,22 @@ export default function HomePage() {
       </div>
 
       {/* Quick Action Buttons */}
-      <div className="grid grid-cols-2 gap-space-sm mb-space-lg">
+      <div className="grid grid-cols-2 gap-3 mb-space-lg">
         <button
           onClick={() => openExpenseModal()}
-          className="h-11 rounded-xl bg-primary text-on-primary font-label-md text-label-md font-semibold flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-all hover:bg-primary-container"
+          className="h-12 min-h-[44px] px-3 py-2.5 rounded-xl bg-primary hover:bg-primary-container text-on-primary font-label-md text-sm font-semibold flex items-center justify-center gap-2 shadow-sm active:scale-[0.98] transition-all duration-150"
           type="button"
         >
-          <span className="material-symbols-outlined text-[18px]">add_circle</span>
+          <span className="material-symbols-outlined text-[20px]">add_circle</span>
           <span>Catat Pengeluaran</span>
         </button>
         <button
           onClick={() => openSubsidyModal()}
-          className="h-11 rounded-xl bg-surface-container text-primary font-label-md text-label-md font-semibold flex items-center justify-center gap-1.5 active:scale-95 transition-all hover:bg-surface-container-high border border-surface-container-high"
+          className="h-12 min-h-[44px] px-3 py-2.5 rounded-xl bg-primary/8 text-primary border border-primary/25 hover:bg-primary/15 hover:border-primary/35 font-label-md text-sm font-semibold flex items-center justify-center gap-2 active:scale-[0.98] transition-all duration-150"
           type="button"
         >
-          <span className="material-symbols-outlined text-[18px]">volunteer_activism</span>
-          <span>+ Tambah Subsidi</span>
+          <span className="material-symbols-outlined text-[20px]">volunteer_activism</span>
+          <span>Tambah Subsidi</span>
         </button>
       </div>
 
@@ -266,10 +272,10 @@ export default function HomePage() {
                     </div>
                   </div>
                   <div className="flex flex-col items-end">
-                    <span className="font-title-currency-md text-title-currency-md font-bold text-primary">
+                    <span className="font-title-currency-md text-title-currency-md font-bold text-primary tabular-nums">
                       {formatRupiah(cat.saldoTersisa)}
                     </span>
-                    <span className="font-label-sm text-[11px] text-on-surface-variant">
+                    <span className="font-label-sm text-[11px] text-on-surface-variant tabular-nums">
                       Plafon: {formatRupiah(cat.totalSubsidi)}
                     </span>
                   </div>
@@ -285,9 +291,9 @@ export default function HomePage() {
                   </div>
                   <div className="flex items-center justify-between text-[11px] text-on-surface-variant">
                     <span>
-                      Terpakai: <strong className="text-error">{formatRupiah(cat.totalPengeluaran)}</strong>
+                      Terpakai: <strong className="text-error tabular-nums">{formatRupiah(cat.totalPengeluaran)}</strong>
                     </span>
-                    <span className="font-semibold">{pct}% realisasi</span>
+                    <span className="font-semibold tabular-nums">{pct}% realisasi</span>
                   </div>
                 </div>
 
@@ -296,17 +302,17 @@ export default function HomePage() {
                   <button
                     type="button"
                     onClick={() => openExpenseModal({ kategoriNama: cat.kategoriNama } as any)}
-                    className="flex-1 h-8 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary font-label-sm text-[11px] font-semibold flex items-center justify-center gap-1 active:scale-95 transition-all"
+                    className="flex-1 h-9 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary font-label-sm text-xs font-semibold flex items-center justify-center gap-1 active:scale-95 transition-all"
                   >
-                    <span className="material-symbols-outlined text-[14px]">add_circle</span>
+                    <span className="material-symbols-outlined text-[15px]">add_circle</span>
                     <span>Catat Pengeluaran</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => openSubsidyModal({ kategoriNama: cat.kategoriNama } as any)}
-                    className="h-8 px-2.5 rounded-lg bg-surface-container-high hover:bg-surface-container text-on-surface-variant font-label-sm text-[11px] font-medium flex items-center justify-center gap-1 active:scale-95 transition-all"
+                    className="h-9 px-3 rounded-lg bg-surface-container-high hover:bg-surface-container text-on-surface-variant font-label-sm text-xs font-medium flex items-center justify-center gap-1 active:scale-95 transition-all"
                   >
-                    <span className="material-symbols-outlined text-[14px]">volunteer_activism</span>
+                    <span className="material-symbols-outlined text-[15px]">volunteer_activism</span>
                     <span>+ Subsidi</span>
                   </button>
                 </div>
@@ -354,7 +360,7 @@ export default function HomePage() {
                     {item.jenisAcara}
                   </h5>
                   <p className="font-body-sm text-body-sm text-on-surface-variant truncate">
-                    {item.namaBarang} ({item.jumlah} {item.satuan} @ {formatRupiah(item.hargaSatuan)})
+                    {item.namaBarang} ({item.jumlah} {item.satuan} @ <span className="tabular-nums">{formatRupiah(item.hargaSatuan)}</span>)
                   </p>
                   <div className="flex items-center gap-space-xs mt-1">
                     <span className="px-2 py-0.5 rounded-full font-label-sm text-label-sm bg-surface-container text-primary font-semibold">
@@ -369,7 +375,7 @@ export default function HomePage() {
               </div>
 
               <div className="flex flex-col items-end flex-shrink-0">
-                <span className="font-title-currency-md text-title-currency-md font-bold text-error tracking-tight">
+                <span className="font-title-currency-md text-title-currency-md font-bold text-error tracking-tight tabular-nums">
                   - {formatRupiah(item.total)}
                 </span>
                 <span className="font-label-sm text-label-sm text-tertiary flex items-center gap-0.5 mt-0.5">
@@ -405,10 +411,13 @@ export default function HomePage() {
         )}
       </div>
 
-      {/* Floating Action Button (FAB) */}
-      <div className="fixed bottom-20 right-4 z-40 max-w-[480px] pointer-events-none flex justify-end no-print">
+      {/* Floating Action Button (FAB) - Tersembunyi di Beranda lewat CSS karena tombol Catat Pengeluaran utama sudah tersedia */}
+      <div
+        className="fixed right-4 z-40 max-w-[480px] pointer-events-none justify-end no-print hidden"
+        style={{ bottom: 'calc(64px + 16px + env(safe-area-inset-bottom, 0px))' }}
+      >
         <div className="pointer-events-auto flex items-center gap-2 group">
-          <span className="bg-inverse-surface text-inverse-on-surface font-label-sm text-label-sm px-3 py-1.5 rounded-full shadow-lg opacity-90 group-hover:opacity-100 transition-opacity">
+          <span className="bg-inverse-surface text-inverse-on-surface font-label-sm text-label-sm px-3 py-1.5 rounded-full shadow-lg opacity-0 pointer-events-none group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-150">
             Catat Pengeluaran
           </span>
           <button

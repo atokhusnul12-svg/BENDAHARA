@@ -77,17 +77,17 @@ module.exports = {
         "space-lg": "1.5rem"
       },
       fontFamily: {
-        "body-sm": ["var(--font-inter)", "sans-serif"],
-        "title-currency-lg": ["var(--font-plus-jakarta-sans)", "sans-serif"],
-        "title-currency-md": ["var(--font-plus-jakarta-sans)", "sans-serif"],
-        "label-lg": ["var(--font-inter)", "sans-serif"],
-        "headline-xl": ["var(--font-plus-jakarta-sans)", "sans-serif"],
-        "headline-lg": ["var(--font-plus-jakarta-sans)", "sans-serif"],
-        "label-sm": ["var(--font-inter)", "sans-serif"],
-        "body-md": ["var(--font-inter)", "sans-serif"],
-        "label-md": ["var(--font-inter)", "sans-serif"],
-        "body-lg": ["var(--font-inter)", "sans-serif"],
-        "headline-md": ["var(--font-plus-jakarta-sans)", "sans-serif"]
+        "body-sm": ["var(--font-inter)", "Inter", "system-ui", "-apple-system", "sans-serif"],
+        "title-currency-lg": ["var(--font-plus-jakarta-sans)", "Plus Jakarta Sans", "Inter", "system-ui", "-apple-system", "sans-serif"],
+        "title-currency-md": ["var(--font-plus-jakarta-sans)", "Plus Jakarta Sans", "Inter", "system-ui", "-apple-system", "sans-serif"],
+        "label-lg": ["var(--font-inter)", "Inter", "system-ui", "-apple-system", "sans-serif"],
+        "headline-xl": ["var(--font-plus-jakarta-sans)", "Plus Jakarta Sans", "Inter", "system-ui", "-apple-system", "sans-serif"],
+        "headline-lg": ["var(--font-plus-jakarta-sans)", "Plus Jakarta Sans", "Inter", "system-ui", "-apple-system", "sans-serif"],
+        "label-sm": ["var(--font-inter)", "Inter", "system-ui", "-apple-system", "sans-serif"],
+        "body-md": ["var(--font-inter)", "Inter", "system-ui", "-apple-system", "sans-serif"],
+        "label-md": ["var(--font-inter)", "Inter", "system-ui", "-apple-system", "sans-serif"],
+        "body-lg": ["var(--font-inter)", "Inter", "system-ui", "-apple-system", "sans-serif"],
+        "headline-md": ["var(--font-plus-jakarta-sans)", "Plus Jakarta Sans", "Inter", "system-ui", "-apple-system", "sans-serif"]
       },
       fontSize: {
         "body-sm": ["12px", { lineHeight: "16px", fontWeight: "400" }],
