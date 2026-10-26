@@ -5,12 +5,22 @@ import { useApp } from '@/context/AppContext';
 import { formatNumber, formatRupiah, parseRupiah } from '@/lib/format';
 
 interface ExpenseItemRow {
+  rowId: string;
   namaBarang: string;
-  jumlah: number;
+  jumlah: number | string;
   satuan: string;
   hargaSatuan: number;
   total: number;
 }
+
+const createDefaultRow = (): ExpenseItemRow => ({
+  rowId: 'row-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 6),
+  namaBarang: '',
+  jumlah: 1,
+  satuan: 'bungkus',
+  hargaSatuan: 0,
+  total: 0,
+});
 
 export default function ExpenseModal() {
   const {
@@ -37,34 +47,35 @@ export default function ExpenseModal() {
   const [jenisAcara, setJenisAcara] = useState('');
   const [catatan, setCatatan] = useState('');
 
+  // Quick category creation state
+  const [isAddingCategory, setIsAddingCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [creatingCategory, setCreatingCategory] = useState(false);
+
   // Multi-item rows (supports single or multiple items in one event)
-  const [items, setItems] = useState<ExpenseItemRow[]>([
-    {
-      namaBarang: '',
-      jumlah: 1,
-      satuan: 'bungkus',
-      hargaSatuan: 0,
-      total: 0,
-    },
-  ]);
+  const [items, setItems] = useState<ExpenseItemRow[]>([createDefaultRow()]);
 
   // Synchronize initial state when modal opens
   useEffect(() => {
     if (!isExpenseModalOpen) return;
 
     setErrorMessage('');
+    setIsAddingCategory(false);
+    setNewCategoryName('');
     const today = new Date().toISOString().split('T')[0];
 
-    if (expenseToEdit) {
+    if (expenseToEdit && expenseToEdit.id) {
       // Edit existing single item
       setKategoriNama(expenseToEdit.kategoriNama);
       const matchedPer = (expenseToEdit.bulanHijriah + ' ' + expenseToEdit.tahunHijriah + ' H').trim();
       setPeriodeLabel(matchedPer || selectedPeriode);
-      setTanggalTransaksi(expenseToEdit.tanggalTransaksi || today);
+      const rawDate = expenseToEdit.tanggalTransaksi;
+      setTanggalTransaksi(rawDate ? String(rawDate).split('T')[0] : today);
       setJenisAcara(expenseToEdit.jenisAcara);
       setCatatan(expenseToEdit.catatan || '');
       setItems([
         {
+          rowId: 'row-edit-' + expenseToEdit.id,
           namaBarang: expenseToEdit.namaBarang,
           jumlah: Number(expenseToEdit.jumlah) || 1,
           satuan: expenseToEdit.satuan || 'bungkus',
@@ -73,22 +84,17 @@ export default function ExpenseModal() {
         },
       ]);
     } else {
-      // Add new
-      const defaultKat = kategori.find(k => k.statusAktif)?.namaKategori || (kategori[0]?.namaKategori ?? 'LBM');
+      // Add new (bisa dengan kategori default dari card)
+      const defaultKat =
+        expenseToEdit?.kategoriNama ||
+        kategori.find(k => k.statusAktif)?.namaKategori ||
+        (kategori[0]?.namaKategori ?? 'LBM (Lajnah Bahtsul Masail)');
       setKategoriNama(defaultKat);
       setPeriodeLabel(selectedPeriode || (periode[0]?.labelPeriode ?? 'Jumadal Ula 1448 H'));
       setTanggalTransaksi(today);
       setJenisAcara('');
       setCatatan('');
-      setItems([
-        {
-          namaBarang: '',
-          jumlah: 1,
-          satuan: 'bungkus',
-          hargaSatuan: 0,
-          total: 0,
-        },
-      ]);
+      setItems([createDefaultRow()]);
     }
   }, [isExpenseModalOpen, expenseToEdit, kategori, periode, selectedPeriode]);
 
@@ -101,13 +107,14 @@ export default function ExpenseModal() {
       const target = { ...copy[index] };
 
       if (field === 'jumlah') {
-        const qty = Math.max(1, parseInt(val, 10) || 1);
-        target.jumlah = qty;
-        target.total = qty * target.hargaSatuan;
+        target.jumlah = val === '' ? '' : val;
+        const numQty = Number(val) || 0;
+        target.total = numQty * target.hargaSatuan;
       } else if (field === 'hargaSatuan') {
         const price = parseRupiah(val);
         target.hargaSatuan = price;
-        target.total = target.jumlah * price;
+        const numQty = Number(target.jumlah) || 0;
+        target.total = numQty * price;
       } else {
         (target as any)[field] = val;
       }
@@ -121,7 +128,8 @@ export default function ExpenseModal() {
     setItems(prev => {
       const copy = [...prev];
       const target = { ...copy[index] };
-      const newQty = Math.max(1, target.jumlah + delta);
+      const current = Math.max(1, Math.floor(Number(target.jumlah) || 1));
+      const newQty = Math.max(1, current + delta);
       target.jumlah = newQty;
       target.total = newQty * target.hargaSatuan;
       copy[index] = target;
@@ -130,16 +138,7 @@ export default function ExpenseModal() {
   };
 
   const addItemRow = () => {
-    setItems(prev => [
-      ...prev,
-      {
-        namaBarang: '',
-        jumlah: 1,
-        satuan: 'bungkus',
-        hargaSatuan: 0,
-        total: 0,
-      },
-    ]);
+    setItems(prev => [...prev, createDefaultRow()]);
   };
 
   const removeItemRow = (index: number) => {
@@ -148,21 +147,21 @@ export default function ExpenseModal() {
   };
 
   // Grand total for this event
-  const grandTotal = items.reduce((sum, item) => sum + item.total, 0);
+  const grandTotal = items.reduce((sum, item) => sum + (Number(item.total) || 0), 0);
 
   // Perhitungan simulasi saldo tersisa untuk kategori dan periode yang dipilih
   const currentCategorySubsidi = subsidi
     .filter(s => {
-      const matchPeriod = (s.bulanHijriah + ' ' + s.tahunHijriah + ' H').trim() === periodeLabel.trim();
-      const matchKat = s.kategoriNama === kategoriNama;
+      const matchPeriod = (s.bulanHijriah + ' ' + s.tahunHijriah + ' H').trim().toLowerCase() === periodeLabel.trim().toLowerCase() || s.periodeId === periodeLabel;
+      const matchKat = s.kategoriNama === kategoriNama || s.kategoriId === kategoriNama;
       return matchPeriod && matchKat;
     })
     .reduce((sum, s) => sum + (Number(s.nominal) || 0), 0);
 
   const currentCategoryExpense = pengeluaran
     .filter(p => {
-      const matchPeriod = (p.bulanHijriah + ' ' + p.tahunHijriah + ' H').trim() === periodeLabel.trim();
-      const matchKat = p.kategoriNama === kategoriNama;
+      const matchPeriod = (p.bulanHijriah + ' ' + p.tahunHijriah + ' H').trim().toLowerCase() === periodeLabel.trim().toLowerCase() || p.periodeId === periodeLabel;
+      const matchKat = p.kategoriNama === kategoriNama || p.kategoriId === kategoriNama;
       // Jika mode edit, kecualikan transaksi yang sedang diedit dari pengurangan lama
       const notBeingEdited = !expenseToEdit || p.id !== expenseToEdit.id;
       return matchPeriod && matchKat && notBeingEdited;
@@ -172,9 +171,35 @@ export default function ExpenseModal() {
   const currentCategoryBalance = currentCategorySubsidi - currentCategoryExpense;
   const simulatedRemainingBalance = currentCategoryBalance - grandTotal;
 
+  const handleQuickCreateCategory = async () => {
+    const name = newCategoryName.trim();
+    if (!name) return;
+    setCreatingCategory(true);
+    setErrorMessage('');
+    try {
+      const res = await fetch('/api/kategori', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ namaKategori: name }),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || 'Gagal menambahkan kategori.');
+      await refreshData();
+      setKategoriNama(name);
+      setNewCategoryName('');
+      setIsAddingCategory(false);
+      showToast('Kategori Baru Ditambahkan', `Kategori "${name}" berhasil dibuat dan siap digunakan.`);
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Gagal menambahkan kategori baru.');
+    } finally {
+      setCreatingCategory(false);
+    }
+  };
+
   // Submit Handler
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (saving) return; // Mencegah submit berulang kali
     setErrorMessage('');
 
     if (!kategoriNama) {
@@ -192,8 +217,9 @@ export default function ExpenseModal() {
         setErrorMessage(`Nama barang pada baris ke-${i + 1} wajib diisi.`);
         return;
       }
-      if (item.jumlah <= 0) {
-        setErrorMessage(`Jumlah barang pada baris ke-${i + 1} harus lebih dari nol.`);
+      const qtyNum = Number(item.jumlah);
+      if (!item.jumlah || isNaN(qtyNum) || qtyNum <= 0) {
+        setErrorMessage(`Jumlah barang pada baris ke-${i + 1} harus berupa angka lebih dari nol.`);
         return;
       }
       if (item.hargaSatuan < 0) {
@@ -202,15 +228,18 @@ export default function ExpenseModal() {
       }
     }
 
-    // Ambil info bulan dan tahun dari label periode
-    const parts = periodeLabel.trim().split(' ');
-    const tahunH = parts.length >= 2 ? parts[parts.length - 2] : '1448';
-    const bulanH = parts.slice(0, -2).join(' ') || (parts[0] ?? 'Jumadal Ula');
+    // Ambil info bulan dan tahun dari master periode yang dipilih
+    const matchedPeriode = periode.find(
+      p => p.labelPeriode.trim().toLowerCase() === periodeLabel.trim().toLowerCase() || p.id === periodeLabel
+    );
+    const bulanH = matchedPeriode ? matchedPeriode.namaBulanHijriah : (periodeLabel.split(' ')[0] || 'Jumadal Ula');
+    const tahunH = matchedPeriode ? String(matchedPeriode.tahunHijriah) : '1448';
+    const periodeId = matchedPeriode ? matchedPeriode.id : periodeLabel;
     const matchedKategori = kategori.find(k => k.namaKategori === kategoriNama);
 
     setSaving(true);
     try {
-      if (expenseToEdit) {
+      if (expenseToEdit && expenseToEdit.id) {
         // Mode Edit (Single Row)
         const singleItem = items[0];
         const res = await fetch('/api/pengeluaran', {
@@ -222,15 +251,15 @@ export default function ExpenseModal() {
             kategoriId: matchedKategori?.id || '',
             bulanHijriah: bulanH,
             tahunHijriah: tahunH,
-            periodeId: periodeLabel,
+            periodeId,
             tanggalTransaksi,
-            jenisAcara,
-            namaBarang: singleItem.namaBarang,
-            jumlah: singleItem.jumlah,
+            jenisAcara: jenisAcara.trim(),
+            namaBarang: singleItem.namaBarang.trim(),
+            jumlah: Number(singleItem.jumlah) || 1,
             satuan: singleItem.satuan,
             hargaSatuan: singleItem.hargaSatuan,
-            total: singleItem.total,
-            catatan,
+            total: (Number(singleItem.jumlah) || 1) * singleItem.hargaSatuan,
+            catatan: catatan.trim(),
           }),
         });
 
@@ -240,7 +269,7 @@ export default function ExpenseModal() {
         }
 
         await refreshData();
-        showToast('Transaksi berhasil diperbarui', 'Sinkronisasi Google Sheets selesai');
+        showToast('Transaksi berhasil diperbarui', json.message || 'Tersimpan dengan sukses');
         closeExpenseModal();
       } else {
         // Mode Tambah Baru (Mendukung Multi-item batch)
@@ -249,15 +278,15 @@ export default function ExpenseModal() {
           kategoriId: matchedKategori?.id || '',
           bulanHijriah: bulanH,
           tahunHijriah: tahunH,
-          periodeId: periodeLabel,
+          periodeId,
           tanggalTransaksi,
-          jenisAcara,
-          namaBarang: item.namaBarang,
-          jumlah: item.jumlah,
+          jenisAcara: jenisAcara.trim(),
+          namaBarang: item.namaBarang.trim(),
+          jumlah: Number(item.jumlah) || 1,
           satuan: item.satuan,
           hargaSatuan: item.hargaSatuan,
-          total: item.total,
-          catatan,
+          total: (Number(item.jumlah) || 1) * item.hargaSatuan,
+          catatan: catatan.trim(),
         }));
 
         const res = await fetch('/api/pengeluaran', {
@@ -272,7 +301,7 @@ export default function ExpenseModal() {
         }
 
         await refreshData();
-        showToast('Pengeluaran berhasil disimpan', 'Sinkronisasi Google Sheets selesai');
+        showToast('Pengeluaran berhasil disimpan', json.message || 'Tersimpan dengan sukses');
         closeExpenseModal();
       }
     } catch (err: any) {
@@ -327,12 +356,43 @@ export default function ExpenseModal() {
         <form onSubmit={handleSubmit} className="flex flex-col gap-space-md">
           {/* 1. Kategori Kegiatan */}
           <div className="flex flex-col gap-1.5">
-            <label className="font-label-lg text-label-lg text-on-surface font-semibold flex items-center justify-between">
-              <span>1. Kategori Kegiatan</span>
-              <span className="font-label-sm text-label-sm text-on-surface-variant font-normal">
-                Wajib diisi
-              </span>
-            </label>
+            <div className="flex items-center justify-between">
+              <label className="font-label-lg text-label-lg text-on-surface font-semibold">
+                1. Kategori Kegiatan
+              </label>
+              <button
+                type="button"
+                onClick={() => setIsAddingCategory(prev => !prev)}
+                className="text-primary hover:text-primary-container font-label-sm text-xs font-semibold flex items-center gap-0.5 active:scale-95"
+              >
+                <span className="material-symbols-outlined text-[15px]">
+                  {isAddingCategory ? 'close' : 'add'}
+                </span>
+                <span>{isAddingCategory ? 'Batal' : '+ Kategori Baru'}</span>
+              </button>
+            </div>
+
+            {isAddingCategory && (
+              <div className="flex items-center gap-2 p-2 bg-surface-container rounded-xl border border-primary/20 animate-in fade-in duration-200">
+                <input
+                  type="text"
+                  placeholder="Nama divisi/kategori baru..."
+                  value={newCategoryName}
+                  onChange={e => setNewCategoryName(e.target.value)}
+                  className="flex-1 h-9 px-3 rounded-lg bg-surface-container-lowest text-on-surface font-body-sm text-xs border border-surface-container focus:outline-none focus:ring-1 focus:ring-primary font-medium"
+                />
+                <button
+                  type="button"
+                  disabled={creatingCategory || !newCategoryName.trim()}
+                  onClick={handleQuickCreateCategory}
+                  className="h-9 px-3 rounded-lg bg-primary text-on-primary font-label-sm text-xs font-semibold flex items-center gap-1 active:scale-95 disabled:opacity-50"
+                >
+                  <span className="material-symbols-outlined text-[14px]">save</span>
+                  <span>{creatingCategory ? 'Menyimpan...' : 'Simpan'}</span>
+                </button>
+              </div>
+            )}
+
             <div className="relative w-full">
               <div className="absolute left-3 top-1/2 -translate-y-1/2 text-primary flex items-center pointer-events-none">
                 <span
@@ -345,7 +405,13 @@ export default function ExpenseModal() {
               <select
                 className="w-full h-12 pl-10 pr-9 rounded-xl bg-surface-container-low font-body-md text-body-md text-on-surface appearance-none focus:outline-none focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary/25 transition-all font-medium"
                 value={kategoriNama}
-                onChange={e => setKategoriNama(e.target.value)}
+                onChange={e => {
+                  if (e.target.value === '__NEW__') {
+                    setIsAddingCategory(true);
+                  } else {
+                    setKategoriNama(e.target.value);
+                  }
+                }}
               >
                 {kategori
                   .filter(k => k.statusAktif)
@@ -354,6 +420,7 @@ export default function ExpenseModal() {
                       {k.namaKategori}
                     </option>
                   ))}
+                <option value="__NEW__">+ Tambah Kategori Baru...</option>
               </select>
               <span className="material-symbols-outlined text-[20px] text-on-surface-variant absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
                 arrow_drop_down
@@ -439,7 +506,7 @@ export default function ExpenseModal() {
 
             {items.map((item, idx) => (
               <div
-                key={idx}
+                key={item.rowId}
                 className="p-3 rounded-xl bg-surface-container-low/60 border border-surface-container flex flex-col gap-2.5 relative"
               >
                 {items.length > 1 && (
@@ -532,7 +599,7 @@ export default function ExpenseModal() {
                       className="w-full h-10 px-2 rounded-lg bg-surface-container-lowest text-on-surface font-title-currency-md text-xs font-bold focus:outline-none border border-surface-container text-right"
                       placeholder="0"
                       type="text"
-                      value={formatNumber(item.hargaSatuan)}
+                      value={item.hargaSatuan === 0 ? '' : formatNumber(item.hargaSatuan)}
                       onChange={e => handleItemChange(idx, 'hargaSatuan', e.target.value)}
                     />
                   </div>

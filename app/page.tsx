@@ -22,11 +22,12 @@ export default function HomePage() {
 
   // Filter transaksi terbaru untuk periode aktif (maksimal 5 transaksi)
   const currentPeriodExpenses = pengeluaran
-    .filter(
-      p =>
-        (p.bulanHijriah + ' ' + p.tahunHijriah + ' H').trim() === selectedPeriode.trim() ||
-        p.periodeId === selectedPeriode
-    )
+    .filter(p => {
+      if (!selectedPeriode || selectedPeriode === 'Semua' || selectedPeriode === 'Semua Periode') return true;
+      const label = `${p.bulanHijriah || ''} ${p.tahunHijriah || ''} H`.trim().toLowerCase();
+      const target = selectedPeriode.trim().toLowerCase();
+      return label === target || (p.periodeId || '').trim().toLowerCase() === target;
+    })
     .slice(0, 5);
 
   const totalSubsidi = summary?.totalSubsidi || 0;
@@ -288,6 +289,26 @@ export default function HomePage() {
                     </span>
                     <span className="font-semibold">{pct}% realisasi</span>
                   </div>
+                </div>
+
+                {/* Tombol Aksi Cepat Kategori */}
+                <div className="flex items-center gap-2 pt-1 border-t border-surface-container mt-0.5">
+                  <button
+                    type="button"
+                    onClick={() => openExpenseModal({ kategoriNama: cat.kategoriNama } as any)}
+                    className="flex-1 h-8 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary font-label-sm text-[11px] font-semibold flex items-center justify-center gap-1 active:scale-95 transition-all"
+                  >
+                    <span className="material-symbols-outlined text-[14px]">add_circle</span>
+                    <span>Catat Pengeluaran</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openSubsidyModal({ kategoriNama: cat.kategoriNama } as any)}
+                    className="h-8 px-2.5 rounded-lg bg-surface-container-high hover:bg-surface-container text-on-surface-variant font-label-sm text-[11px] font-medium flex items-center justify-center gap-1 active:scale-95 transition-all"
+                  >
+                    <span className="material-symbols-outlined text-[14px]">volunteer_activism</span>
+                    <span>+ Subsidi</span>
+                  </button>
                 </div>
               </div>
             );

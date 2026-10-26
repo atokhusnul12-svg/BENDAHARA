@@ -25,21 +25,34 @@ export default function SubsidyModal() {
   const [nominal, setNominal] = useState(0);
   const [catatan, setCatatan] = useState('');
 
+  // Quick category creation state
+  const [isAddingCategory, setIsAddingCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [creatingCategory, setCreatingCategory] = useState(false);
+
   useEffect(() => {
     if (!isSubsidyModalOpen) return;
 
     setErrorMessage('');
+    setIsAddingCategory(false);
+    setNewCategoryName('');
     const today = new Date().toISOString().split('T')[0];
 
-    if (subsidyToEdit) {
+    if (subsidyToEdit && subsidyToEdit.id) {
+      // Mode Edit
       setKategoriNama(subsidyToEdit.kategoriNama);
       const matchedPer = (subsidyToEdit.bulanHijriah + ' ' + subsidyToEdit.tahunHijriah + ' H').trim();
       setPeriodeLabel(matchedPer || selectedPeriode);
-      setTanggalTransaksi(subsidyToEdit.tanggalTransaksi || today);
+      const rawDate = subsidyToEdit.tanggalTransaksi;
+      setTanggalTransaksi(rawDate ? String(rawDate).split('T')[0] : today);
       setNominal(Number(subsidyToEdit.nominal) || 0);
       setCatatan(subsidyToEdit.catatan || '');
     } else {
-      const defaultKat = kategori.find(k => k.statusAktif)?.namaKategori || (kategori[0]?.namaKategori ?? 'LBM');
+      // Mode Tambah (bisa dengan kategori default dari card)
+      const defaultKat =
+        subsidyToEdit?.kategoriNama ||
+        kategori.find(k => k.statusAktif)?.namaKategori ||
+        (kategori[0]?.namaKategori ?? 'LBM (Lajnah Bahtsul Masail)');
       setKategoriNama(defaultKat);
       setPeriodeLabel(selectedPeriode || (periode[0]?.labelPeriode ?? 'Jumadal Ula 1448 H'));
       setTanggalTransaksi(today);
@@ -48,29 +61,63 @@ export default function SubsidyModal() {
     }
   }, [isSubsidyModalOpen, subsidyToEdit, kategori, periode, selectedPeriode]);
 
+  const handleQuickCreateCategory = async () => {
+    const name = newCategoryName.trim();
+    if (!name) return;
+    setCreatingCategory(true);
+    setErrorMessage('');
+    try {
+      const res = await fetch('/api/kategori', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ namaKategori: name }),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || 'Gagal menambahkan kategori.');
+      await refreshData();
+      setKategoriNama(name);
+      setNewCategoryName('');
+      setIsAddingCategory(false);
+      showToast('Kategori Baru Ditambahkan', `Kategori "${name}" berhasil dibuat dan siap digunakan.`);
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Gagal menambahkan kategori baru.');
+    } finally {
+      setCreatingCategory(false);
+    }
+  };
+
   if (!isSubsidyModalOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (saving) return; // Mencegah klik ganda
     setErrorMessage('');
 
     if (!kategoriNama) {
       setErrorMessage('Kategori kegiatan wajib dipilih.');
       return;
     }
-    if (nominal <= 0) {
+    if (!tanggalTransaksi) {
+      setErrorMessage('Tanggal transaksi subsidi wajib diisi.');
+      return;
+    }
+    const nominalNum = Number(nominal);
+    if (isNaN(nominalNum) || nominalNum <= 0) {
       setErrorMessage('Nominal subsidi harus lebih besar dari Rp 0.');
       return;
     }
 
-    const parts = periodeLabel.trim().split(' ');
-    const tahunH = parts.length >= 2 ? parts[parts.length - 2] : '1448';
-    const bulanH = parts.slice(0, -2).join(' ') || (parts[0] ?? 'Jumadal Ula');
+    const matchedPeriode = periode.find(
+      p => p.labelPeriode.trim().toLowerCase() === periodeLabel.trim().toLowerCase() || p.id === periodeLabel
+    );
+    const bulanH = matchedPeriode ? matchedPeriode.namaBulanHijriah : (periodeLabel.split(' ')[0] || 'Jumadal Ula');
+    const tahunH = matchedPeriode ? String(matchedPeriode.tahunHijriah) : '1448';
+    const periodeId = matchedPeriode ? matchedPeriode.id : periodeLabel;
     const matchedKategori = kategori.find(k => k.namaKategori === kategoriNama);
 
     setSaving(true);
     try {
-      if (subsidyToEdit) {
+      if (subsidyToEdit && subsidyToEdit.id) {
         const res = await fetch('/api/subsidi', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -80,10 +127,10 @@ export default function SubsidyModal() {
             kategoriId: matchedKategori?.id || '',
             bulanHijriah: bulanH,
             tahunHijriah: tahunH,
-            periodeId: periodeLabel,
+            periodeId,
             tanggalTransaksi,
-            nominal,
-            catatan,
+            nominal: nominalNum,
+            catatan: catatan.trim(),
           }),
         });
 
@@ -91,7 +138,7 @@ export default function SubsidyModal() {
         if (!json.success) throw new Error(json.error || 'Gagal mengubah catatan subsidi.');
 
         await refreshData();
-        showToast('Catatan subsidi berhasil diubah', 'Google Sheets tersinkronisasi');
+        showToast('Catatan subsidi berhasil diubah', json.message || 'Perubahan subsidi tersimpan');
         closeSubsidyModal();
       } else {
         const res = await fetch('/api/subsidi', {
@@ -102,10 +149,10 @@ export default function SubsidyModal() {
             kategoriId: matchedKategori?.id || '',
             bulanHijriah: bulanH,
             tahunHijriah: tahunH,
-            periodeId: periodeLabel,
+            periodeId,
             tanggalTransaksi,
-            nominal,
-            catatan,
+            nominal: nominalNum,
+            catatan: catatan.trim(),
           }),
         });
 
@@ -113,7 +160,7 @@ export default function SubsidyModal() {
         if (!json.success) throw new Error(json.error || 'Gagal menyimpan penambahan subsidi.');
 
         await refreshData();
-        showToast('Subsidi berhasil ditambahkan', 'Alokasi kas berhasil tersimpan di Google Sheets');
+        showToast('Subsidi berhasil ditambahkan', json.message || 'Subsidi kas berhasil tersimpan');
         closeSubsidyModal();
       }
     } catch (err: any) {
@@ -122,6 +169,8 @@ export default function SubsidyModal() {
       setSaving(false);
     }
   };
+
+  const isEditMode = Boolean(subsidyToEdit && subsidyToEdit.id);
 
   return (
     <div className="fixed inset-0 z-50 bg-inverse-surface/40 backdrop-blur-sm flex items-end justify-center sm:items-center p-0 sm:p-4 overflow-y-auto">
@@ -136,7 +185,7 @@ export default function SubsidyModal() {
             </span>
             <div className="flex flex-col">
               <h2 className="font-headline-md text-headline-md text-on-surface font-bold">
-                {subsidyToEdit ? 'Edit Alokasi Subsidi' : 'Tambah Subsidi Kas'}
+                {isEditMode ? 'Edit Alokasi Subsidi' : 'Tambah Subsidi Kas'}
               </h2>
               <span className="font-label-sm text-label-sm text-on-surface-variant">
                 Bendahara MMD • Alokasi Amanah
@@ -164,14 +213,54 @@ export default function SubsidyModal() {
         <form onSubmit={handleSubmit} className="flex flex-col gap-space-md">
           {/* Kategori Divisi */}
           <div className="flex flex-col gap-1.5">
-            <label className="font-label-sm text-label-sm text-on-surface-variant uppercase font-semibold">
-              Kategori Divisi
-            </label>
+            <div className="flex items-center justify-between">
+              <label className="font-label-sm text-label-sm text-on-surface-variant uppercase font-semibold">
+                Kategori Divisi
+              </label>
+              <button
+                type="button"
+                onClick={() => setIsAddingCategory(prev => !prev)}
+                className="text-primary hover:text-primary-container font-label-sm text-xs font-semibold flex items-center gap-0.5 active:scale-95"
+              >
+                <span className="material-symbols-outlined text-[15px]">
+                  {isAddingCategory ? 'close' : 'add'}
+                </span>
+                <span>{isAddingCategory ? 'Batal' : '+ Kategori Baru'}</span>
+              </button>
+            </div>
+
+            {isAddingCategory && (
+              <div className="flex items-center gap-2 p-2 bg-surface-container rounded-xl border border-primary/20 animate-in fade-in duration-200">
+                <input
+                  type="text"
+                  placeholder="Nama divisi/kategori baru..."
+                  value={newCategoryName}
+                  onChange={e => setNewCategoryName(e.target.value)}
+                  className="flex-1 h-9 px-3 rounded-lg bg-surface-container-lowest text-on-surface font-body-sm text-xs border border-surface-container focus:outline-none focus:ring-1 focus:ring-primary font-medium"
+                />
+                <button
+                  type="button"
+                  disabled={creatingCategory || !newCategoryName.trim()}
+                  onClick={handleQuickCreateCategory}
+                  className="h-9 px-3 rounded-lg bg-primary text-on-primary font-label-sm text-xs font-semibold flex items-center gap-1 active:scale-95 disabled:opacity-50"
+                >
+                  <span className="material-symbols-outlined text-[14px]">save</span>
+                  <span>{creatingCategory ? 'Menyimpan...' : 'Simpan'}</span>
+                </button>
+              </div>
+            )}
+
             <div className="relative w-full">
               <select
                 className="w-full h-12 px-3 pr-8 rounded-xl bg-surface-container-low font-body-md text-body-md text-on-surface appearance-none focus:outline-none focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary/25 transition-all font-medium"
                 value={kategoriNama}
-                onChange={e => setKategoriNama(e.target.value)}
+                onChange={e => {
+                  if (e.target.value === '__NEW__') {
+                    setIsAddingCategory(true);
+                  } else {
+                    setKategoriNama(e.target.value);
+                  }
+                }}
               >
                 {kategori
                   .filter(k => k.statusAktif)
@@ -180,6 +269,7 @@ export default function SubsidyModal() {
                       {k.namaKategori}
                     </option>
                   ))}
+                <option value="__NEW__">+ Tambah Kategori Baru...</option>
               </select>
               <span className="material-symbols-outlined text-[20px] text-on-surface-variant absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
                 arrow_drop_down
@@ -237,7 +327,7 @@ export default function SubsidyModal() {
                 className="w-full h-12 px-3 bg-transparent text-on-surface font-title-currency-md text-title-currency-md font-bold focus:outline-none text-left"
                 placeholder="0"
                 type="text"
-                value={formatNumber(nominal)}
+                value={nominal === 0 ? '' : formatNumber(nominal)}
                 onChange={e => setNominal(parseRupiah(e.target.value))}
                 required
               />
@@ -282,7 +372,7 @@ export default function SubsidyModal() {
               ) : (
                 <>
                   <span className="material-symbols-outlined text-[18px]">save</span>
-                  <span>{subsidyToEdit ? 'Simpan Perubahan' : 'Simpan Subsidi'}</span>
+                  <span>{isEditMode ? 'Simpan Perubahan' : 'Simpan Subsidi'}</span>
                 </>
               )}
             </button>

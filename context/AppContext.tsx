@@ -53,7 +53,28 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [kategori, setKategori] = useState<KategoriItem[]>([]);
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
   const [summary, setSummary] = useState<FinancialSummary | null>(null);
-  const [selectedPeriode, setSelectedPeriode] = useState<string>('');
+  const [selectedPeriode, setSelectedPeriodeState] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('mmd_selected_periode');
+        if (saved) return saved;
+      } catch (e) {}
+    }
+    return '';
+  });
+
+  const setSelectedPeriode = useCallback((label: string) => {
+    setSelectedPeriodeState(label);
+    if (typeof window !== 'undefined') {
+      try {
+        if (label) {
+          localStorage.setItem('mmd_selected_periode', label);
+        } else {
+          localStorage.removeItem('mmd_selected_periode');
+        }
+      } catch (e) {}
+    }
+  }, []);
 
   // Toast
   const [toast, setToast] = useState<ToastState>({
@@ -89,7 +110,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setIsExpenseModalOpen(false);
   };
 
-  const openSubsidyModal = (subs?: SubsidiItem) => {
+  const openSubsidyModal = (subs?: any) => {
     setSubsidyToEdit(subs || null);
     setIsSubsidyModalOpen(true);
   };
@@ -117,13 +138,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setSyncStatus(json.data.syncStatus || null);
         setSummary(json.data.summary || null);
 
-        // Jika belum ada selectedPeriode, pilih periode yang aktif
-        if (!selectedPeriode && json.data.periode && json.data.periode.length > 0) {
-          const active = json.data.periode.find((p: PeriodeItem) => p.statusAktif);
-          if (active) {
-            setSelectedPeriode(active.labelPeriode);
-          } else {
-            setSelectedPeriode(json.data.periode[0].labelPeriode);
+        // Jika belum ada periode yang dipilih atau periode tidak ada lagi di daftar, gunakan periode aktif
+        if (json.data.periode && json.data.periode.length > 0) {
+          const currentValid = selectedPeriode && json.data.periode.some(
+            (p: PeriodeItem) => p.labelPeriode.toLowerCase() === selectedPeriode.toLowerCase() || p.id === selectedPeriode
+          );
+          if (!currentValid) {
+            const active = json.data.periode.find((p: PeriodeItem) => p.statusAktif);
+            const fallback = active ? active.labelPeriode : json.data.periode[0].labelPeriode;
+            setSelectedPeriode(fallback);
           }
         }
       }
@@ -132,7 +155,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, [selectedPeriode]);
+  }, [selectedPeriode, setSelectedPeriode]);
 
   useEffect(() => {
     refreshData();

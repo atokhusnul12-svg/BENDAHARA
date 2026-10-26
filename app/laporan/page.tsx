@@ -29,15 +29,19 @@ export default function LaporanPage() {
 
   // Filter pengeluaran berdasarkan periode, kategori, dan search query
   const filteredList = pengeluaran.filter(item => {
-    const matchPeriod =
-      !selectedPeriode ||
-      (item.bulanHijriah + ' ' + item.tahunHijriah + ' H').trim() === selectedPeriode.trim() ||
-      item.periodeId === selectedPeriode;
+    const isAllPeriods = !selectedPeriode || selectedPeriode === 'Semua' || selectedPeriode === 'Semua Periode';
+    const label = `${item.bulanHijriah || ''} ${item.tahunHijriah || ''} H`.trim().toLowerCase();
+    const targetPeriod = (selectedPeriode || '').trim().toLowerCase();
+    const matchPeriod = isAllPeriods || label === targetPeriod || (item.periodeId || '').trim().toLowerCase() === targetPeriod;
 
+    const itemKat = (item.kategoriNama || '').toLowerCase().trim();
+    const actKat = activeKategori.toLowerCase().trim();
     const matchKat =
       activeKategori === 'Semua' ||
-      item.kategoriNama === activeKategori ||
-      item.kategoriId === activeKategori;
+      itemKat === actKat ||
+      item.kategoriId === activeKategori ||
+      (itemKat.length > 2 && actKat.includes(itemKat)) ||
+      (actKat.length > 2 && itemKat.includes(actKat));
 
     const query = searchQuery.toLowerCase();
     const matchSearch =
@@ -60,7 +64,11 @@ export default function LaporanPage() {
           saldoTersisa: summary?.saldoTersisa || 0,
           persentasePenggunaan: summary?.persentasePenggunaan || 0,
         }
-      : summary?.categories?.find(c => c.kategoriNama === activeKategori) || {
+      : summary?.categories?.find(c => {
+          const cKat = c.kategoriNama.toLowerCase().trim();
+          const actKat = activeKategori.toLowerCase().trim();
+          return cKat === actKat || (cKat.length > 2 && actKat.includes(cKat)) || (actKat.length > 2 && cKat.includes(actKat));
+        }) || {
           totalSubsidi: 0,
           totalPengeluaran: 0,
           saldoTersisa: 0,

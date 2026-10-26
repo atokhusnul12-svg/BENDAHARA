@@ -22,9 +22,10 @@ export async function GET(request: NextRequest) {
 
     // Filter transaksi yang akan diekspor
     let exportTransactions = data.pengeluaran;
-    if (filterPeriode && filterPeriode !== 'Semua') {
+    if (filterPeriode && filterPeriode !== 'Semua' && filterPeriode !== 'Semua Periode') {
+      const target = filterPeriode.trim().toLowerCase();
       exportTransactions = exportTransactions.filter(
-        p => (p.bulanHijriah + ' ' + p.tahunHijriah + ' H').trim() === filterPeriode.trim() || p.periodeId === filterPeriode
+        p => `${p.bulanHijriah || ''} ${p.tahunHijriah || ''} H`.trim().toLowerCase() === target || (p.periodeId || '').trim().toLowerCase() === target
       );
     }
     if (filterKategori && filterKategori !== 'Semua') {

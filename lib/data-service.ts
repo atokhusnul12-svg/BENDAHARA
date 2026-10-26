@@ -53,6 +53,30 @@ const DEFAULT_PERIODE: PeriodeItem[] = [
 ];
 
 /**
+ * Helper untuk pencocokan kategori yang fleksibel dan toleran
+ * Mendukung pencocokan nama persis, ID, singkatan (misal: "LBM" vs "LBM (Lajnah Bahtsul Masail)"),
+ * maupun case-insensitive.
+ */
+export function matchCategory(
+  itemKat: string | undefined,
+  kat: { namaKategori: string; id?: string }
+): boolean {
+  if (!itemKat) return false;
+  const a = itemKat.trim().toLowerCase();
+  const b = (kat.namaKategori || '').trim().toLowerCase();
+  const id = (kat.id || '').trim().toLowerCase();
+
+  if (a === b || (id && a === id)) return true;
+  // Format singkatan di awal, misal "lbm" cocok dengan "lbm (lajnah bahtsul masail)"
+  if (b.startsWith(a + ' ') || b.startsWith(a + '(') || a.startsWith(b + ' ')) return true;
+  // Keyword khusus divisi pesantren MMD
+  if (a.includes('lbm') && b.includes('lbm')) return true;
+  if (a.includes('tafaquh') && b.includes('tafaquh')) return true;
+  if (a.includes('musyawaroh') && b.includes('musyawaroh')) return true;
+  return false;
+}
+
+/**
  * Memastikan direktori dan database lokal tersedia
  */
 function ensureLocalDb(): AppDatabase {
@@ -82,15 +106,28 @@ function ensureLocalDb(): AppDatabase {
     const parsed = JSON.parse(content) as AppDatabase;
     if (!parsed.pengeluaran) parsed.pengeluaran = [];
     if (!parsed.subsidi) parsed.subsidi = [];
-    if (!parsed.periode || parsed.periode.length === 0) parsed.periode = DEFAULT_PERIODE;
-    if (!parsed.kategori || parsed.kategori.length === 0) parsed.kategori = DEFAULT_KATEGORI;
+    if (!parsed.periode || parsed.periode.length === 0) parsed.periode = [...DEFAULT_PERIODE];
+    if (!parsed.kategori || parsed.kategori.length === 0) parsed.kategori = [...DEFAULT_KATEGORI];
+
+    // Pastikan seluruh kategori bawaan selalu ada di list
+    for (const defKat of DEFAULT_KATEGORI) {
+      if (!parsed.kategori.some(k => matchCategory(k.namaKategori, defKat))) {
+        parsed.kategori.unshift(defKat);
+      }
+    }
+    for (const defPer of DEFAULT_PERIODE) {
+      if (!parsed.periode.some(p => p.labelPeriode.toLowerCase() === defPer.labelPeriode.toLowerCase())) {
+        parsed.periode.unshift(defPer);
+      }
+    }
+
     return parsed;
   } catch (err) {
     const fallback: AppDatabase = {
       pengeluaran: [],
       subsidi: [],
-      periode: DEFAULT_PERIODE,
-      kategori: DEFAULT_KATEGORI,
+      periode: [...DEFAULT_PERIODE],
+      kategori: [...DEFAULT_KATEGORI],
     };
     fs.writeFileSync(DATA_FILE_PATH, JSON.stringify(fallback, null, 2), 'utf-8');
     return fallback;
@@ -218,10 +255,80 @@ export async function getAllData(): Promise<{
     const remote = await callGoogleAppsScript('getData');
     if (remote.success) {
       // Sinkronkan data dari Google Sheets ke penyimpanan lokal sebagai cache
-      if (Array.isArray(remote.pengeluaran)) localDb.pengeluaran = remote.pengeluaran;
-      if (Array.isArray(remote.subsidi)) localDb.subsidi = remote.subsidi;
-      if (Array.isArray(remote.periode) && remote.periode.length > 0) localDb.periode = remote.periode;
-      if (Array.isArray(remote.kategori) && remote.kategori.length > 0) localDb.kategori = remote.kategori;
+      if (Array.isArray(remote.pengeluaran)) {
+        localDb.pengeluaran = remote.pengeluaran.map((p: any) => ({
+          ...p,
+          id: String(p.id || ''),
+          eventId: String(p.eventId || ''),
+          bulanHijriah: String(p.bulanHijriah || ''),
+          tahunHijriah: String(p.tahunHijriah || ''),
+          periodeId: String(p.periodeId || ''),
+          kategoriId: String(p.kategoriId || ''),
+          kategoriNama: String(p.kategoriNama || ''),
+          jenisAcara: String(p.jenisAcara || ''),
+          namaBarang: String(p.namaBarang || ''),
+          satuan: String(p.satuan || 'pcs'),
+          catatan: p.catatan ? String(p.catatan) : '',
+          jumlah: Number(p.jumlah) || 1,
+          hargaSatuan: Number(p.hargaSatuan) || 0,
+          total: Number(p.total) || ((Number(p.jumlah) || 1) * (Number(p.hargaSatuan) || 0)),
+          tanggalTransaksi: p.tanggalTransaksi ? String(p.tanggalTransaksi).split('T')[0] : '',
+        }));
+      }
+
+      if (Array.isArray(remote.subsidi)) {
+        localDb.subsidi = remote.subsidi.map((s: any) => ({
+          ...s,
+          id: String(s.id || ''),
+          bulanHijriah: String(s.bulanHijriah || ''),
+          tahunHijriah: String(s.tahunHijriah || ''),
+          periodeId: String(s.periodeId || ''),
+          kategoriId: String(s.kategoriId || ''),
+          kategoriNama: String(s.kategoriNama || ''),
+          catatan: s.catatan ? String(s.catatan) : '',
+          nominal: Number(s.nominal) || 0,
+          tanggalTransaksi: s.tanggalTransaksi ? String(s.tanggalTransaksi).split('T')[0] : '',
+        }));
+      }
+
+      if (Array.isArray(remote.periode)) {
+        const remotePers = remote.periode.map((per: any) => ({
+          ...per,
+          id: String(per.id || ''),
+          namaBulanHijriah: String(per.namaBulanHijriah || ''),
+          tahunHijriah: String(per.tahunHijriah || ''),
+          labelPeriode: String(per.labelPeriode || ''),
+          statusAktif: Boolean(per.statusAktif),
+        }));
+
+        const mergedPeriode = [...remotePers];
+        for (const defPer of DEFAULT_PERIODE) {
+          if (!mergedPeriode.some(p => p.labelPeriode.toLowerCase() === defPer.labelPeriode.toLowerCase())) {
+            mergedPeriode.unshift(defPer);
+            callGoogleAppsScript('createPeriode', { data: defPer }).catch(() => {});
+          }
+        }
+        localDb.periode = mergedPeriode;
+      }
+
+      if (Array.isArray(remote.kategori)) {
+        const remoteKats = remote.kategori.map((kat: any) => ({
+          ...kat,
+          id: String(kat.id || ''),
+          namaKategori: String(kat.namaKategori || ''),
+          statusAktif: kat.statusAktif !== undefined ? Boolean(kat.statusAktif) : true,
+        }));
+
+        const mergedKategori = [...remoteKats];
+        for (const defKat of DEFAULT_KATEGORI) {
+          if (!mergedKategori.some(k => matchCategory(k.namaKategori, defKat))) {
+            mergedKategori.unshift(defKat);
+            callGoogleAppsScript('createKategori', { data: defKat }).catch(() => {});
+          }
+        }
+        localDb.kategori = mergedKategori;
+      }
+
       saveLocalDb(localDb);
 
       return {
@@ -235,6 +342,22 @@ export async function getAllData(): Promise<{
           spreadsheetId: 'Online',
           lastSyncTime: new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' }) + ' WIB',
           isLocalFallback: false,
+        },
+      };
+    } else {
+      // Remote call failed
+      return {
+        pengeluaran: localDb.pengeluaran,
+        subsidi: localDb.subsidi,
+        periode: localDb.periode,
+        kategori: localDb.kategori,
+        syncStatus: {
+          connected: false,
+          spreadsheetName: 'Koneksi Google Sheets Terputus',
+          spreadsheetId: '-',
+          lastSyncTime: new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' }) + ' WIB',
+          error: remote.error || 'Gagal memuat data dari Google Sheets.',
+          isLocalFallback: true,
         },
       };
     }
@@ -251,6 +374,7 @@ export async function getAllData(): Promise<{
       spreadsheetName: 'Penyimpanan Lokal Aktif',
       spreadsheetId: '-',
       lastSyncTime: new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' }) + ' WIB',
+      error: 'Google Apps Script belum dikonfigurasi. Menggunakan penyimpanan data lokal.',
       isLocalFallback: true,
     },
   };
@@ -270,19 +394,30 @@ export function calculateSummary(
   filterPeriodeLabel?: string,
   filterKategoriNama?: string
 ): FinancialSummary {
-  // Filter berdasarkan periode
-  let filteredPengeluaran = filterPeriodeLabel
-    ? pengeluaran.filter(p => (p.bulanHijriah + ' ' + p.tahunHijriah + ' H').trim() === filterPeriodeLabel.trim() || p.periodeId === filterPeriodeLabel)
-    : pengeluaran;
+  const isAllPeriods = !filterPeriodeLabel || filterPeriodeLabel === 'Semua' || filterPeriodeLabel === 'Semua Periode';
+  const isAllCategories = !filterKategoriNama || filterKategoriNama === 'Semua';
 
-  let filteredSubsidi = filterPeriodeLabel
-    ? subsidi.filter(s => (s.bulanHijriah + ' ' + s.tahunHijriah + ' H').trim() === filterPeriodeLabel.trim() || s.periodeId === filterPeriodeLabel)
-    : subsidi;
+  const matchPeriod = (item: { bulanHijriah?: string; tahunHijriah?: string; periodeId?: string }) => {
+    if (isAllPeriods) return true;
+    const target = filterPeriodeLabel?.trim().toLowerCase();
+    const label = `${item.bulanHijriah || ''} ${item.tahunHijriah || ''} H`.trim().toLowerCase();
+    const pid = (item.periodeId || '').trim().toLowerCase();
+    return label === target || pid === target;
+  };
+
+  // Filter berdasarkan periode
+  let filteredPengeluaran = pengeluaran.filter(matchPeriod);
+  let filteredSubsidi = subsidi.filter(matchPeriod);
 
   // Filter opsional berdasarkan kategori tunggal
-  if (filterKategoriNama && filterKategoriNama !== 'Semua') {
-    filteredPengeluaran = filteredPengeluaran.filter(p => p.kategoriNama === filterKategoriNama || p.kategoriId === filterKategoriNama);
-    filteredSubsidi = filteredSubsidi.filter(s => s.kategoriNama === filterKategoriNama || s.kategoriId === filterKategoriNama);
+  if (!isAllCategories) {
+    const dummyKat = { namaKategori: filterKategoriNama || '', id: filterKategoriNama || '' };
+    filteredPengeluaran = filteredPengeluaran.filter(
+      p => matchCategory(p.kategoriNama, dummyKat) || matchCategory(p.kategoriId, dummyKat)
+    );
+    filteredSubsidi = filteredSubsidi.filter(
+      s => matchCategory(s.kategoriNama, dummyKat) || matchCategory(s.kategoriId, dummyKat)
+    );
   }
 
   const totalPengeluaran = filteredPengeluaran.reduce((sum, item) => sum + (Number(item.total) || 0), 0);
@@ -298,14 +433,14 @@ export function calculateSummary(
     .filter(k => k.statusAktif)
     .map(kat => {
       const katPengeluaran = pengeluaran.filter(p => {
-        const matchesPeriod = !filterPeriodeLabel || (p.bulanHijriah + ' ' + p.tahunHijriah + ' H').trim() === filterPeriodeLabel.trim() || p.periodeId === filterPeriodeLabel;
-        const matchesKat = p.kategoriNama === kat.namaKategori || p.kategoriId === kat.id;
+        const matchesPeriod = matchPeriod(p);
+        const matchesKat = matchCategory(p.kategoriNama, kat) || matchCategory(p.kategoriId, kat);
         return matchesPeriod && matchesKat;
       });
 
       const katSubsidi = subsidi.filter(s => {
-        const matchesPeriod = !filterPeriodeLabel || (s.bulanHijriah + ' ' + s.tahunHijriah + ' H').trim() === filterPeriodeLabel.trim() || s.periodeId === filterPeriodeLabel;
-        const matchesKat = s.kategoriNama === kat.namaKategori || s.kategoriId === kat.id;
+        const matchesPeriod = matchPeriod(s);
+        const matchesKat = matchCategory(s.kategoriNama, kat) || matchCategory(s.kategoriId, kat);
         return matchesPeriod && matchesKat;
       });
 
@@ -347,10 +482,15 @@ export async function addPengeluaran(items: Omit<PengeluaranItem, 'id' | 'create
   const now = new Date().toISOString();
   const eventId = 'EVT-' + Math.random().toString(36).substring(2, 9).toUpperCase();
 
+  const localDb = ensureLocalDb();
   const preparedItems: PengeluaranItem[] = items.map((item, index) => {
     const jumlah = Number(item.jumlah) || 1;
     const hargaSatuan = Number(item.hargaSatuan) || 0;
     const total = Number(item.total) || jumlah * hargaSatuan;
+
+    const matchedKat = localDb.kategori.find(k => matchCategory(item.kategoriNama, k) || matchCategory(item.kategoriId, k));
+    const kategoriId = item.kategoriId || matchedKat?.id || '';
+    const kategoriNama = matchedKat?.namaKategori || item.kategoriNama || '';
 
     return {
       id: 'EXP-' + Date.now().toString(36) + '-' + (index + 1) + '-' + Math.random().toString(36).substring(2, 5),
@@ -361,8 +501,8 @@ export async function addPengeluaran(items: Omit<PengeluaranItem, 'id' | 'create
       periodeId: item.periodeId || '',
       bulanHijriah: item.bulanHijriah || '',
       tahunHijriah: item.tahunHijriah || '',
-      kategoriId: item.kategoriId || '',
-      kategoriNama: item.kategoriNama || '',
+      kategoriId,
+      kategoriNama,
       jenisAcara: item.jenisAcara || '',
       namaBarang: item.namaBarang || '',
       jumlah,
@@ -383,7 +523,6 @@ export async function addPengeluaran(items: Omit<PengeluaranItem, 'id' | 'create
   }
 
   // Simpan ke local db
-  const localDb = ensureLocalDb();
   localDb.pengeluaran.unshift(...preparedItems);
   saveLocalDb(localDb);
 
@@ -400,11 +539,13 @@ export async function updatePengeluaran(item: Partial<PengeluaranItem> & { id: s
   if (!item.id) return { success: false, error: 'ID transaksi pengeluaran wajib ada.' };
 
   const scriptUrl = process.env.GOOGLE_SCRIPT_URL?.trim();
+  let remoteUpdated = false;
   if (scriptUrl) {
     const remote = await callGoogleAppsScript('updatePengeluaran', { data: item });
     if (!remote.success) {
       return { success: false, error: remote.error || 'Gagal memperbarui transaksi di Google Sheets.' };
     }
+    remoteUpdated = true;
   }
 
   const localDb = ensureLocalDb();
@@ -427,6 +568,10 @@ export async function updatePengeluaran(item: Partial<PengeluaranItem> & { id: s
     return { success: true };
   }
 
+  if (remoteUpdated) {
+    return { success: true };
+  }
+
   return { success: false, error: 'Transaksi tidak ditemukan.' };
 }
 
@@ -440,18 +585,24 @@ export async function deletePengeluaran(id: string): Promise<{
   if (!id) return { success: false, error: 'ID transaksi pengeluaran wajib ada.' };
 
   const scriptUrl = process.env.GOOGLE_SCRIPT_URL?.trim();
+  let remoteDeleted = false;
   if (scriptUrl) {
     const remote = await callGoogleAppsScript('deletePengeluaran', { id });
     if (!remote.success) {
       return { success: false, error: remote.error || 'Gagal menghapus transaksi dari Google Sheets.' };
     }
+    remoteDeleted = true;
   }
 
   const localDb = ensureLocalDb();
   const initialLen = localDb.pengeluaran.length;
   localDb.pengeluaran = localDb.pengeluaran.filter(p => p.id !== id);
-  if (localDb.pengeluaran.length < initialLen) {
+  const localDeleted = localDb.pengeluaran.length < initialLen;
+  if (localDeleted) {
     saveLocalDb(localDb);
+  }
+
+  if (remoteDeleted || localDeleted) {
     return { success: true };
   }
 
@@ -467,6 +618,11 @@ export async function addSubsidi(item: Omit<SubsidiItem, 'id' | 'createdAt' | 'u
   error?: string;
 }> {
   const now = new Date().toISOString();
+  const localDb = ensureLocalDb();
+  const matchedKat = localDb.kategori.find(k => matchCategory(item.kategoriNama, k) || matchCategory(item.kategoriId, k));
+  const kategoriId = item.kategoriId || matchedKat?.id || '';
+  const kategoriNama = matchedKat?.namaKategori || item.kategoriNama || '';
+
   const prepared: SubsidiItem = {
     id: 'SUB-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 6),
     createdAt: now,
@@ -474,9 +630,9 @@ export async function addSubsidi(item: Omit<SubsidiItem, 'id' | 'createdAt' | 'u
     tanggalTransaksi: item.tanggalTransaksi || now.split('T')[0],
     periodeId: item.periodeId || '',
     bulanHijriah: item.bulanHijriah || '',
-    tahunHijriah: item.tahunHijriah || '',
-    kategoriId: item.kategoriId || '',
-    kategoriNama: item.kategoriNama || '',
+    tahunHijriah: item.tahunHijriah ? String(item.tahunHijriah) : '',
+    kategoriId,
+    kategoriNama,
     nominal: Number(item.nominal) || 0,
     catatan: item.catatan || '',
   };
@@ -489,7 +645,6 @@ export async function addSubsidi(item: Omit<SubsidiItem, 'id' | 'createdAt' | 'u
     }
   }
 
-  const localDb = ensureLocalDb();
   localDb.subsidi.unshift(prepared);
   saveLocalDb(localDb);
 
@@ -506,11 +661,13 @@ export async function updateSubsidi(item: Partial<SubsidiItem> & { id: string })
   if (!item.id) return { success: false, error: 'ID subsidi wajib ada.' };
 
   const scriptUrl = process.env.GOOGLE_SCRIPT_URL?.trim();
+  let remoteUpdated = false;
   if (scriptUrl) {
     const remote = await callGoogleAppsScript('updateSubsidi', { data: item });
     if (!remote.success) {
       return { success: false, error: remote.error || 'Gagal mengubah subsidi di Google Sheets.' };
     }
+    remoteUpdated = true;
   }
 
   const localDb = ensureLocalDb();
@@ -527,6 +684,10 @@ export async function updateSubsidi(item: Partial<SubsidiItem> & { id: string })
     return { success: true };
   }
 
+  if (remoteUpdated) {
+    return { success: true };
+  }
+
   return { success: false, error: 'Subsidi tidak ditemukan.' };
 }
 
@@ -540,18 +701,24 @@ export async function deleteSubsidi(id: string): Promise<{
   if (!id) return { success: false, error: 'ID subsidi wajib ada.' };
 
   const scriptUrl = process.env.GOOGLE_SCRIPT_URL?.trim();
+  let remoteDeleted = false;
   if (scriptUrl) {
     const remote = await callGoogleAppsScript('deleteSubsidi', { id });
     if (!remote.success) {
       return { success: false, error: remote.error || 'Gagal menghapus subsidi dari Google Sheets.' };
     }
+    remoteDeleted = true;
   }
 
   const localDb = ensureLocalDb();
   const initialLen = localDb.subsidi.length;
   localDb.subsidi = localDb.subsidi.filter(s => s.id !== id);
-  if (localDb.subsidi.length < initialLen) {
+  const localDeleted = localDb.subsidi.length < initialLen;
+  if (localDeleted) {
     saveLocalDb(localDb);
+  }
+
+  if (remoteDeleted || localDeleted) {
     return { success: true };
   }
 
@@ -626,14 +793,17 @@ export async function setActivePeriode(id: string): Promise<{ success: boolean; 
   const target = localDb.periode.find(p => p.id === id);
   if (!target) return { success: false, error: 'Periode tidak ditemukan.' };
 
+  const scriptUrl = process.env.GOOGLE_SCRIPT_URL?.trim();
+  if (scriptUrl) {
+    const remote = await callGoogleAppsScript('updatePeriode', { data: { id, statusAktif: true } });
+    if (!remote.success) {
+      return { success: false, error: remote.error || 'Gagal mengubah periode aktif di Google Sheets.' };
+    }
+  }
+
   localDb.periode.forEach(p => {
     p.statusAktif = p.id === id;
   });
-
-  const scriptUrl = process.env.GOOGLE_SCRIPT_URL?.trim();
-  if (scriptUrl) {
-    await callGoogleAppsScript('updatePeriode', { data: { id, statusAktif: true } });
-  }
 
   saveLocalDb(localDb);
   return { success: true };
@@ -685,14 +855,17 @@ export async function updateKategori(item: { id: string; namaKategori?: string; 
   const kat = localDb.kategori.find(k => k.id === item.id);
   if (!kat) return { success: false, error: 'Kategori tidak ditemukan.' };
 
+  const scriptUrl = process.env.GOOGLE_SCRIPT_URL?.trim();
+  if (scriptUrl) {
+    const remote = await callGoogleAppsScript('updateKategori', { data: item });
+    if (!remote.success) {
+      return { success: false, error: remote.error || 'Gagal mengubah kategori di Google Sheets.' };
+    }
+  }
+
   if (item.namaKategori !== undefined) kat.namaKategori = item.namaKategori.trim();
   if (item.statusAktif !== undefined) kat.statusAktif = item.statusAktif;
   kat.updatedAt = new Date().toISOString();
-
-  const scriptUrl = process.env.GOOGLE_SCRIPT_URL?.trim();
-  if (scriptUrl) {
-    await callGoogleAppsScript('updateKategori', { data: item });
-  }
 
   saveLocalDb(localDb);
   return { success: true };

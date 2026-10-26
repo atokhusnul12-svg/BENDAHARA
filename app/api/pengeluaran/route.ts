@@ -45,9 +45,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: result.error }, { status: 500 });
     }
 
+    const isGSheets = Boolean(process.env.GOOGLE_SCRIPT_URL?.trim());
+
     return NextResponse.json({
       success: true,
-      message: 'Pengeluaran berhasil disimpan ke Google Sheets.',
+      message: isGSheets
+        ? 'Pengeluaran berhasil disimpan ke Google Sheets.'
+        : 'Pengeluaran berhasil disimpan ke penyimpanan lokal.',
       data: result.data,
     });
   } catch (error: any) {
@@ -65,6 +69,10 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'ID transaksi pengeluaran wajib disertakan.' }, { status: 400 });
     }
 
+    if (body.namaBarang !== undefined && !body.namaBarang.trim()) {
+      return NextResponse.json({ success: false, error: 'Nama barang / rincian belanja tidak boleh kosong.' }, { status: 400 });
+    }
+
     if (body.jumlah !== undefined && Number(body.jumlah) <= 0) {
       return NextResponse.json({ success: false, error: 'Jumlah barang harus lebih dari nol.' }, { status: 400 });
     }
@@ -78,9 +86,13 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ success: false, error: result.error }, { status: 500 });
     }
 
+    const isGSheets = Boolean(process.env.GOOGLE_SCRIPT_URL?.trim());
+
     return NextResponse.json({
       success: true,
-      message: 'Transaksi pengeluaran berhasil diperbarui di Google Sheets.',
+      message: isGSheets
+        ? 'Transaksi pengeluaran berhasil diperbarui di Google Sheets.'
+        : 'Transaksi pengeluaran berhasil diperbarui.',
     });
   } catch (error: any) {
     return NextResponse.json(
@@ -104,9 +116,13 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ success: false, error: result.error }, { status: 500 });
     }
 
+    const isGSheets = Boolean(process.env.GOOGLE_SCRIPT_URL?.trim());
+
     return NextResponse.json({
       success: true,
-      message: 'Transaksi pengeluaran berhasil dihapus.',
+      message: isGSheets
+        ? 'Transaksi pengeluaran berhasil dihapus dari Google Sheets.'
+        : 'Transaksi pengeluaran berhasil dihapus.',
     });
   } catch (error: any) {
     return NextResponse.json(

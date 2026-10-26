@@ -19,9 +19,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: result.error }, { status: 500 });
     }
 
+    const isGSheets = Boolean(process.env.GOOGLE_SCRIPT_URL?.trim());
+
     return NextResponse.json({
       success: true,
-      message: 'Catatan penambahan subsidi berhasil disimpan ke Google Sheets.',
+      message: isGSheets
+        ? 'Catatan penambahan subsidi berhasil disimpan ke Google Sheets.'
+        : 'Catatan penambahan subsidi berhasil disimpan ke penyimpanan lokal.',
       data: result.data,
     });
   } catch (error: any) {
@@ -39,7 +43,7 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'ID catatan subsidi wajib disertakan.' }, { status: 400 });
     }
 
-    if (body.nominal !== undefined && Number(body.nominal) <= 0) {
+    if (body.nominal !== undefined && (isNaN(Number(body.nominal)) || Number(body.nominal) <= 0)) {
       return NextResponse.json({ success: false, error: 'Nominal subsidi harus lebih besar dari 0.' }, { status: 400 });
     }
 
@@ -48,9 +52,13 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ success: false, error: result.error }, { status: 500 });
     }
 
+    const isGSheets = Boolean(process.env.GOOGLE_SCRIPT_URL?.trim());
+
     return NextResponse.json({
       success: true,
-      message: 'Data subsidi berhasil diperbarui di Google Sheets.',
+      message: isGSheets
+        ? 'Data subsidi berhasil diperbarui di Google Sheets.'
+        : 'Data subsidi berhasil diperbarui.',
     });
   } catch (error: any) {
     return NextResponse.json(
@@ -74,9 +82,13 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ success: false, error: result.error }, { status: 500 });
     }
 
+    const isGSheets = Boolean(process.env.GOOGLE_SCRIPT_URL?.trim());
+
     return NextResponse.json({
       success: true,
-      message: 'Catatan subsidi berhasil dihapus.',
+      message: isGSheets
+        ? 'Catatan subsidi berhasil dihapus dari Google Sheets.'
+        : 'Catatan subsidi berhasil dihapus.',
     });
   } catch (error: any) {
     return NextResponse.json(

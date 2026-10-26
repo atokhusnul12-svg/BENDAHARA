@@ -25,11 +25,12 @@ export default function SubsidiPage() {
   const [deleting, setDeleting] = useState(false);
 
   // Filter riwayat subsidi untuk periode aktif
-  const currentPeriodSubsidies = subsidi.filter(
-    s =>
-      (s.bulanHijriah + ' ' + s.tahunHijriah + ' H').trim() === selectedPeriode.trim() ||
-      s.periodeId === selectedPeriode
-  );
+  const currentPeriodSubsidies = subsidi.filter(s => {
+    if (!selectedPeriode || selectedPeriode === 'Semua' || selectedPeriode === 'Semua Periode') return true;
+    const label = `${s.bulanHijriah || ''} ${s.tahunHijriah || ''} H`.trim().toLowerCase();
+    const targetPeriod = (selectedPeriode || '').trim().toLowerCase();
+    return label === targetPeriod || (s.periodeId || '').trim().toLowerCase() === targetPeriod;
+  });
 
   const handleDeleteClick = (item: SubsidiItem) => {
     setSubsidyToDelete(item);
@@ -149,7 +150,7 @@ export default function SubsidiPage() {
 
                   <button
                     className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-surface-container-low text-primary hover:bg-surface-container font-label-sm text-label-sm active:scale-95 transition-transform flex-shrink-0 font-semibold"
-                    onClick={() => openSubsidyModal()}
+                    onClick={() => openSubsidyModal({ kategoriNama: cat.kategoriNama } as any)}
                     type="button"
                   >
                     <span className="material-symbols-outlined text-[16px]">add</span>

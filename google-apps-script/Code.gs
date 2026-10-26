@@ -185,6 +185,30 @@ function ensureSheetsInitialized(ss) {
         sheet.setFrozenRows(1);
       }
     }
+
+    // Inisialisasi kategori bawaan jika sheet Kategori belum ada baris data
+    if (sheetName === 'Kategori' && sheet.getLastRow() <= 1) {
+      const now = new Date().toISOString();
+      const defaultKategori = [
+        ['KAT-LBM', 'LBM (Lajnah Bahtsul Masail)', true, now, now],
+        ['KAT-TFQ', 'Tafaquh & Mubahitsin', true, now, now],
+        ['KAT-MSY', 'Musyawaroh', true, now, now]
+      ];
+      defaultKategori.forEach(function(row) {
+        sheet.appendRow(row);
+      });
+    }
+
+    // Inisialisasi periode bawaan jika sheet Periode belum ada baris data
+    if (sheetName === 'Periode' && sheet.getLastRow() <= 1) {
+      const now = new Date().toISOString();
+      const defaultPeriode = [
+        ['PER-1448-JU', 'Jumadal Ula', '1448', 'Jumadal Ula 1448 H', true, now]
+      ];
+      defaultPeriode.forEach(function(row) {
+        sheet.appendRow(row);
+      });
+    }
   }
 }
 
@@ -307,8 +331,8 @@ function handleUpdatePengeluaran(ss, item) {
 
   for (let r = 1; r < values.length; r++) {
     if (values[r][idColIndex] === id) {
-      const jumlah = Number(item.jumlah) || Number(values[r][headers.indexOf('jumlah')]);
-      const hargaSatuan = Number(item.hargaSatuan) !== undefined ? Number(item.hargaSatuan) : Number(values[r][headers.indexOf('hargaSatuan')]);
+      const jumlah = item.jumlah !== undefined ? Number(item.jumlah) : Number(values[r][headers.indexOf('jumlah')]);
+      const hargaSatuan = item.hargaSatuan !== undefined ? Number(item.hargaSatuan) : Number(values[r][headers.indexOf('hargaSatuan')]);
       const total = jumlah * hargaSatuan;
       const now = new Date().toISOString();
 
