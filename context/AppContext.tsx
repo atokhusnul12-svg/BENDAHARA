@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react';
 import {
   FinancialSummary,
   KategoriItem,
@@ -9,6 +9,7 @@ import {
   SubsidiItem,
   SyncStatus,
 } from '@/lib/types';
+import { calculateFinancialSummary } from '@/lib/summary';
 
 interface ToastState {
   show: boolean;
@@ -24,7 +25,7 @@ interface AppContextType {
   periode: PeriodeItem[];
   kategori: KategoriItem[];
   syncStatus: SyncStatus | null;
-  summary: FinancialSummary | null;
+  summary: FinancialSummary;
   selectedPeriode: string;
   setSelectedPeriode: (label: string) => void;
   refreshData: () => Promise<void>;
@@ -43,6 +44,11 @@ interface AppContextType {
   closeSubsidyModal: () => void;
   removeSubsidiLocally: (id: string) => void;
   deleteRecord: (type: 'subsidi' | 'pengeluaran' | 'periode' | 'kategori', id: string) => Promise<boolean>;
+  // Single Source of Truth CRUD Handlers
+  addSubsidiRecord: (item: Omit<SubsidiItem, 'id' | 'createdAt' | 'updatedAt'>) => Promise<SubsidiItem>;
+  updateSubsidiRecord: (item: Partial<SubsidiItem> & { id: string }) => Promise<boolean>;
+  addPengeluaranBatch: (items: Omit<PengeluaranItem, 'id' | 'createdAt' | 'updatedAt'>[]) => Promise<PengeluaranItem[]>;
+  updatePengeluaranRecord: (item: Partial<PengeluaranItem> & { id: string }) => Promise<boolean>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -50,7 +56,7 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
-  // Inisialisasi awal dari cache browser lokal (offline-first)
+  // Inisialisasi awal dari cache browser lokal (offline-first, Single Source of Truth)
   const [pengeluaran, setPengeluaran] = useState<PengeluaranItem[]>(() => {
     if (typeof window !== 'undefined') {
       try {
@@ -65,6 +71,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
     return [];
   });
+
   const [subsidi, setSubsidi] = useState<SubsidiItem[]>(() => {
     if (typeof window !== 'undefined') {
       try {
@@ -79,6 +86,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
     return [];
   });
+
   const [periode, setPeriode] = useState<PeriodeItem[]>(() => {
     if (typeof window !== 'undefined') {
       try {
@@ -88,6 +96,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
     return [];
   });
+
   const [kategori, setKategori] = useState<KategoriItem[]>(() => {
     if (typeof window !== 'undefined') {
       try {
@@ -97,16 +106,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
     return [];
   });
+
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
-  const [summary, setSummary] = useState<FinancialSummary | null>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const cached = localStorage.getItem('mmd_offline_cache');
-        if (cached) return JSON.parse(cached).summary || null;
-      } catch (e) {}
-    }
-    return null;
-  });
 
   const [selectedPeriode, setSelectedPeriodeState] = useState<string>(() => {
     if (typeof window !== 'undefined') {
@@ -175,17 +176,264 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setIsSubsidyModalOpen(false);
   };
 
+  /**
+   * Simpan perubahan ke localStorage secara terpusat dengan versi skema
+   */
   const saveToOfflineCache = (field: 'subsidi' | 'pengeluaran' | 'periode' | 'kategori', data: any) => {
     if (typeof window !== 'undefined') {
       try {
         const cachedStr = localStorage.getItem('mmd_offline_cache');
         const cached = cachedStr ? JSON.parse(cachedStr) : {};
         cached[field] = data;
+        cached.schemaVersion = 1;
+        cached.savedAt = new Date().toISOString();
         localStorage.setItem('mmd_offline_cache', JSON.stringify(cached));
-      } catch (e) {}
+      } catch (e) {
+        console.error('[AppContext] Gagal menulis ke localStorage:', e);
+      }
     }
   };
 
+  /**
+   * Single Source of Truth Summary:
+   * Selalu dihitung ulang secara sinkron dan otomatis dari state lokal aktif.
+   * Tidak akan pernah tertinggal, salah periode, atau menghasilkan NaN.
+   */
+  const summary: FinancialSummary = useMemo(() => {
+    return calculateFinancialSummary(
+      pengeluaran,
+      subsidi,
+      kategori,
+      selectedPeriode
+    );
+  }, [pengeluaran, subsidi, kategori, selectedPeriode]);
+
+  /**
+   * 1. TAMBAH SUBSIDI (Single Source of Truth)
+   * Tulis lokal -> render seketika -> simpan localStorage -> sinkron Google Sheets di background
+   */
+  const addSubsidiRecord = useCallback(async (
+    item: Omit<SubsidiItem, 'id' | 'createdAt' | 'updatedAt'>
+  ): Promise<SubsidiItem> => {
+    const now = new Date().toISOString();
+    const id = 'SUB-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 6);
+
+    const newRecord: SubsidiItem = {
+      ...item,
+      id,
+      createdAt: now,
+      updatedAt: now,
+      nominal: Number(item.nominal) || 0,
+      catatan: item.catatan || '',
+      tanggalTransaksi: item.tanggalTransaksi || now.split('T')[0],
+      bulanHijriah: item.bulanHijriah || '',
+      tahunHijriah: String(item.tahunHijriah || ''),
+      periodeId: item.periodeId || '',
+      kategoriId: item.kategoriId || '',
+      kategoriNama: item.kategoriNama || '',
+    };
+
+    console.log('[addSubsidiRecord] 1. Menambahkan subsidi ke State & localStorage:', newRecord);
+
+    // 1. TULIS LOKAL SEKETIKA
+    setSubsidi(prev => {
+      const updated = [newRecord, ...prev.filter(s => String(s.id).trim() !== id)];
+      saveToOfflineCache('subsidi', updated);
+      return updated;
+    });
+
+    // 2. SINKRONISASI KE GOOGLE SHEETS
+    try {
+      const res = await fetch('/api/subsidi', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newRecord),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        console.warn('[addSubsidiRecord] GSheets belum merespons sukses, tetap aman di lokal:', json?.error);
+        showToast('Tersimpan di Perangkat', 'Data subsidi aman di memori lokal.', 'info');
+      } else {
+        console.log('[addSubsidiRecord] 2. Sukses tersinkron ke Google Sheets');
+        showToast('Subsidi Berhasil Disimpan', 'Tersinkronisasi sempurna dengan Google Sheets.');
+      }
+    } catch (netErr: any) {
+      console.warn('[addSubsidiRecord] Mode offline / jaringan lambat, tersimpan di perangkat.');
+      showToast('Tersimpan Offline', 'Data subsidi tersimpan di memori perangkat.', 'info');
+    }
+
+    return newRecord;
+  }, [showToast]);
+
+  /**
+   * 2. UPDATE SUBSIDI
+   */
+  const updateSubsidiRecord = useCallback(async (
+    item: Partial<SubsidiItem> & { id: string }
+  ): Promise<boolean> => {
+    const targetId = String(item.id).trim();
+    const now = new Date().toISOString();
+
+    console.log('[updateSubsidiRecord] 1. Memperbarui subsidi di State & localStorage:', targetId);
+
+    // 1. Update state seketika
+    setSubsidi(prev => {
+      const updated = prev.map(s => {
+        if (String(s.id).trim() === targetId) {
+          return {
+            ...s,
+            ...item,
+            nominal: item.nominal !== undefined ? Number(item.nominal) : s.nominal,
+            updatedAt: now,
+          };
+        }
+        return s;
+      });
+      saveToOfflineCache('subsidi', updated);
+      return updated;
+    });
+
+    // 2. Kirim update ke API
+    try {
+      const res = await fetch('/api/subsidi', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(item),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        showToast('Perubahan Disimpan Lokal', 'Perubahan tersimpan di perangkat.', 'info');
+      } else {
+        showToast('Subsidi Diperbarui', 'Perubahan tersinkron dengan Google Sheets.');
+      }
+    } catch (e) {
+      showToast('Perubahan Disimpan Lokal', 'Koneksi lambat, tersimpan di perangkat.', 'info');
+    }
+
+    return true;
+  }, [showToast]);
+
+  /**
+   * 3. TAMBAH PENGELUARAN (Batch Multi-item)
+   * Tulis lokal -> render seketika -> simpan localStorage -> sinkron Google Sheets di background
+   */
+  const addPengeluaranBatch = useCallback(async (
+    items: Omit<PengeluaranItem, 'id' | 'createdAt' | 'updatedAt'>[]
+  ): Promise<PengeluaranItem[]> => {
+    const now = new Date().toISOString();
+    const eventId = 'EVT-' + Math.random().toString(36).substring(2, 9).toUpperCase();
+
+    const preparedItems: PengeluaranItem[] = items.map((it, idx) => {
+      const jumlah = Number(it.jumlah) || 1;
+      const hargaSatuan = Number(it.hargaSatuan) || 0;
+      const total = Number(it.total) || jumlah * hargaSatuan;
+      return {
+        ...it,
+        id: 'EXP-' + Date.now().toString(36) + '-' + (idx + 1) + '-' + Math.random().toString(36).substring(2, 5),
+        eventId: it.eventId || eventId,
+        createdAt: now,
+        updatedAt: now,
+        jumlah,
+        hargaSatuan,
+        total,
+        satuan: it.satuan || 'pcs',
+        catatan: it.catatan || '',
+        tanggalTransaksi: it.tanggalTransaksi || now.split('T')[0],
+        bulanHijriah: it.bulanHijriah || '',
+        tahunHijriah: String(it.tahunHijriah || ''),
+        periodeId: it.periodeId || '',
+        kategoriId: it.kategoriId || '',
+        kategoriNama: it.kategoriNama || '',
+      };
+    });
+
+    console.log('[addPengeluaranBatch] 1. Menambahkan pengeluaran ke State & localStorage:', preparedItems.length, 'item');
+
+    // 1. TULIS LOKAL SEKETIKA
+    setPengeluaran(prev => {
+      const updated = [...preparedItems, ...prev];
+      saveToOfflineCache('pengeluaran', updated);
+      return updated;
+    });
+
+    // 2. SINKRONISASI KE GOOGLE SHEETS
+    try {
+      const res = await fetch('/api/pengeluaran', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: preparedItems }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        console.warn('[addPengeluaranBatch] Server belum merespons sukses, tetap di lokal:', json?.error);
+        showToast('Tersimpan di Perangkat', 'Pengeluaran tersimpan lokal, akan disinkronkan ke Sheets.', 'info');
+      } else {
+        console.log('[addPengeluaranBatch] 2. Sukses tersinkron ke Google Sheets');
+        showToast('Pengeluaran Berhasil Disimpan', 'Tersinkronisasi sempurna dengan Google Sheets.');
+      }
+    } catch (e) {
+      showToast('Tersimpan Offline', 'Pengeluaran tersimpan di memori perangkat.', 'info');
+    }
+
+    return preparedItems;
+  }, [showToast]);
+
+  /**
+   * 4. UPDATE PENGELUARAN
+   */
+  const updatePengeluaranRecord = useCallback(async (
+    item: Partial<PengeluaranItem> & { id: string }
+  ): Promise<boolean> => {
+    const targetId = String(item.id).trim();
+    const now = new Date().toISOString();
+
+    console.log('[updatePengeluaranRecord] 1. Memperbarui transaksi di State & localStorage:', targetId);
+
+    // 1. Update state seketika
+    setPengeluaran(prev => {
+      const updated = prev.map(p => {
+        if (String(p.id).trim() === targetId) {
+          const jumlah = item.jumlah !== undefined ? Number(item.jumlah) : p.jumlah;
+          const hargaSatuan = item.hargaSatuan !== undefined ? Number(item.hargaSatuan) : p.hargaSatuan;
+          const total = item.total !== undefined ? Number(item.total) : jumlah * hargaSatuan;
+          return {
+            ...p,
+            ...item,
+            jumlah,
+            hargaSatuan,
+            total,
+            updatedAt: now,
+          };
+        }
+        return p;
+      });
+      saveToOfflineCache('pengeluaran', updated);
+      return updated;
+    });
+
+    // 2. Kirim update ke API
+    try {
+      const res = await fetch('/api/pengeluaran', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(item),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        showToast('Perubahan Disimpan Lokal', 'Perubahan tersimpan di perangkat.', 'info');
+      } else {
+        showToast('Transaksi Diperbarui', 'Perubahan tersinkron dengan Google Sheets.');
+      }
+    } catch (e) {
+      showToast('Perubahan Disimpan Lokal', 'Koneksi lambat, tersimpan di perangkat.', 'info');
+    }
+
+    return true;
+  }, [showToast]);
+
+  /**
+   * 5. HAPUS DATA SENTRAL (Anti-Resurrection & Instant UI Update)
+   */
   const deleteRecord = useCallback(async (
     type: 'subsidi' | 'pengeluaran' | 'periode' | 'kategori',
     id: string
@@ -195,28 +443,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       throw new Error(`ID ${type} tidak valid.`);
     }
 
-    console.log(`[deleteRecord] 1. Mengirim permintaan hapus ${type}:`, targetId);
+    console.log(`[deleteRecord] 1. Menghapus seketika dari State lokal: ${type} ${targetId}`);
 
-    // Kirim request ke endpoint API
-    const res = await fetch(`/api/${type}?id=${encodeURIComponent(targetId)}`, {
-      method: 'DELETE',
-      headers: {
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-        Pragma: 'no-cache',
-      },
-    });
-
-    const json = await res.json().catch(() => ({ success: false, error: 'Gagal memproses respons server.' }));
-    console.log(`[deleteRecord] 2. Respons server:`, json);
-
-    if (!res.ok || !json.success) {
-      console.error(`[deleteRecord] GAGAL menghapus ${type}:`, json?.error);
-      throw new Error(json?.error || `Gagal menghapus data ${type}.`);
-    }
-
-    console.log(`[deleteRecord] 3. Menghapus item dari state lokal & memperbarui localStorage`);
-
-    // Catat ke pending deleted di localStorage agar tidak kembali saat sync
+    // 1. Catat ke pending deleted di localStorage agar item TIDAK PERNAH bisa hidup kembali dari Sheets
     if (typeof window !== 'undefined') {
       try {
         const key = `mmd_pending_deleted_${type}`;
@@ -229,87 +458,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       } catch (e) {}
     }
 
-    // Mutasi state lokal seketika & update summary
+    // 2. HAPUS DARI STATE LOKAL SEKETIKA (0ms UI latency, item langsung hilang dari tampilan)
     if (type === 'subsidi') {
       setSubsidi(prev => {
-        const deletedItem = prev.find(s => String(s.id || '').trim() === targetId);
         const updated = prev.filter(s => String(s.id || '').trim() !== targetId);
-
-        if (deletedItem) {
-          const nominal = Number(deletedItem.nominal) || 0;
-          setSummary(prevSum => {
-            if (!prevSum) return null;
-            const newTotalSub = Math.max(0, prevSum.totalSubsidi - nominal);
-            const newSaldo = newTotalSub - prevSum.totalPengeluaran;
-            const newPct = newTotalSub > 0 ? Math.round((prevSum.totalPengeluaran / newTotalSub) * 1000) / 10 : 0;
-            return {
-              ...prevSum,
-              totalSubsidi: newTotalSub,
-              saldoTersisa: newSaldo,
-              persentasePenggunaan: newPct,
-              categories: (prevSum.categories || []).map(cat => {
-                if (
-                  cat.kategoriNama === deletedItem.kategoriNama ||
-                  cat.kategoriId === deletedItem.kategoriId
-                ) {
-                  const sub = Math.max(0, cat.totalSubsidi - nominal);
-                  const sisa = sub - cat.totalPengeluaran;
-                  const pct = sub > 0 ? Math.round((cat.totalPengeluaran / sub) * 1000) / 10 : 0;
-                  return {
-                    ...cat,
-                    totalSubsidi: sub,
-                    saldoTersisa: sisa,
-                    persentasePenggunaan: pct,
-                  };
-                }
-                return cat;
-              }),
-            };
-          });
-        }
-
         saveToOfflineCache('subsidi', updated);
         return updated;
       });
     } else if (type === 'pengeluaran') {
       setPengeluaran(prev => {
-        const deletedItem = prev.find(p => String(p.id || '').trim() === targetId);
         const updated = prev.filter(p => String(p.id || '').trim() !== targetId);
-
-        if (deletedItem) {
-          const totalVal = Number(deletedItem.total) || ((Number(deletedItem.jumlah) || 1) * (Number(deletedItem.hargaSatuan) || 0));
-          setSummary(prevSum => {
-            if (!prevSum) return null;
-            const newTotalPengeluaran = Math.max(0, prevSum.totalPengeluaran - totalVal);
-            const newSaldo = prevSum.totalSubsidi - newTotalPengeluaran;
-            const newPct = prevSum.totalSubsidi > 0 ? Math.round((newTotalPengeluaran / prevSum.totalSubsidi) * 1000) / 10 : 0;
-            return {
-              ...prevSum,
-              totalPengeluaran: newTotalPengeluaran,
-              saldoTersisa: newSaldo,
-              persentasePenggunaan: newPct,
-              categories: (prevSum.categories || []).map(cat => {
-                if (
-                  cat.kategoriNama === deletedItem.kategoriNama ||
-                  cat.kategoriId === deletedItem.kategoriId
-                ) {
-                  const kel = Math.max(0, cat.totalPengeluaran - totalVal);
-                  const sisa = cat.totalSubsidi - kel;
-                  const pct = cat.totalSubsidi > 0 ? Math.round((kel / cat.totalSubsidi) * 1000) / 10 : 0;
-                  return {
-                    ...cat,
-                    totalPengeluaran: kel,
-                    saldoTersisa: sisa,
-                    persentasePenggunaan: pct,
-                    jumlahTransaksi: Math.max(0, (cat.jumlahTransaksi || 1) - 1),
-                  };
-                }
-                return cat;
-              }),
-            };
-          });
-        }
-
         saveToOfflineCache('pengeluaran', updated);
         return updated;
       });
@@ -327,9 +485,25 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       });
     }
 
-    // Refresh data untuk memastikan sinkronisasi menyeluruh dengan server
-    await refreshData();
-    console.log(`[deleteRecord] 4. Berhasil memperbarui data dan render ulang untuk ${type}`);
+    // 3. Kirim permintaan hapus ke server di background
+    try {
+      const res = await fetch(`/api/${type}?id=${encodeURIComponent(targetId)}`, {
+        method: 'DELETE',
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          Pragma: 'no-cache',
+        },
+      });
+      const json = await res.json().catch(() => ({ success: false }));
+      if (res.ok && json.success) {
+        console.log(`[deleteRecord] 3. Server berhasil menghapus ${type} ${targetId}`);
+      } else {
+        console.warn(`[deleteRecord] Server merespons non-ok, item tetap dihapus dari web:`, json?.error);
+      }
+    } catch (err) {
+      console.warn(`[deleteRecord] Jaringan offline, penghapusan tersimpan secara lokal.`);
+    }
+
     return true;
   }, []);
 
@@ -337,30 +511,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     deleteRecord('subsidi', id).catch(() => {});
   }, [deleteRecord]);
 
+  /**
+   * 6. SINKRONISASI DATA DARI SERVER (Refresh / Sync)
+   * Menggabungkan remote data tanpa menimpa data lokal yang belum tersinkron,
+   * dan tanpa membangkitkan kembali data yang sudah dihapus.
+   */
   const refreshData = useCallback(async () => {
     try {
       setLoading(true);
-
-      // Sinkronkan pending deleted subsidi & pengeluaran jika ada
-      if (typeof window !== 'undefined') {
-        try {
-          const pendingSubStr = localStorage.getItem('mmd_pending_deleted_subsidi');
-          const pendingSub: string[] = pendingSubStr ? JSON.parse(pendingSubStr) : [];
-          if (pendingSub.length > 0) {
-            for (const pid of pendingSub) {
-              fetch(`/api/subsidi?id=${encodeURIComponent(pid)}`, { method: 'DELETE' }).catch(() => {});
-            }
-          }
-
-          const pendingExpStr = localStorage.getItem('mmd_pending_deleted_pengeluaran');
-          const pendingExp: string[] = pendingExpStr ? JSON.parse(pendingExpStr) : [];
-          if (pendingExp.length > 0) {
-            for (const pid of pendingExp) {
-              fetch(`/api/pengeluaran?id=${encodeURIComponent(pid)}`, { method: 'DELETE' }).catch(() => {});
-            }
-          }
-        } catch (e) {}
-      }
 
       const url = selectedPeriode
         ? `/api/data?periode=${encodeURIComponent(selectedPeriode)}&_t=${Date.now()}`
@@ -387,36 +545,58 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           } catch (e) {}
         }
 
-        const cleanSubsidi = (json.data.subsidi || []).filter(
+        // 1. Saring remote subsidi agar tidak ada item pending deleted
+        const remoteSubsidi = (json.data.subsidi || []).filter(
           (s: any) => !pendingSubsidiList.includes(String(s.id || '').trim())
         );
 
-        const cleanPengeluaran = (json.data.pengeluaran || []).filter(
+        // 2. Gabungkan dengan item lokal yang baru ditambahkan (jangan sampai tertimpa)
+        setSubsidi(prevLocal => {
+          const merged = [...remoteSubsidi];
+          for (const localItem of prevLocal) {
+            const localId = String(localItem.id || '').trim();
+            if (pendingSubsidiList.includes(localId)) continue;
+            const existsInRemote = merged.some(r => String(r.id || '').trim() === localId);
+            if (!existsInRemote) {
+              merged.unshift(localItem);
+            }
+          }
+          saveToOfflineCache('subsidi', merged);
+          return merged;
+        });
+
+        // 3. Saring remote pengeluaran
+        const remotePengeluaran = (json.data.pengeluaran || []).filter(
           (p: any) => !pendingPengeluaranList.includes(String(p.id || '').trim())
         );
 
-        setPengeluaran(cleanPengeluaran);
-        setSubsidi(cleanSubsidi);
-        setPeriode(json.data.periode || []);
-        setKategori(json.data.kategori || []);
-        setSyncStatus(json.data.syncStatus || null);
-        setSummary(json.data.summary || null);
+        // 4. Gabungkan dengan item lokal
+        setPengeluaran(prevLocal => {
+          const merged = [...remotePengeluaran];
+          for (const localItem of prevLocal) {
+            const localId = String(localItem.id || '').trim();
+            if (pendingPengeluaranList.includes(localId)) continue;
+            const existsInRemote = merged.some(r => String(r.id || '').trim() === localId);
+            if (!existsInRemote) {
+              merged.unshift(localItem);
+            }
+          }
+          saveToOfflineCache('pengeluaran', merged);
+          return merged;
+        });
 
-        // Simpan ke offline cache browser (localStorage)
-        if (typeof window !== 'undefined') {
-          try {
-            localStorage.setItem('mmd_offline_cache', JSON.stringify({
-              pengeluaran: cleanPengeluaran,
-              subsidi: cleanSubsidi,
-              periode: json.data.periode || [],
-              kategori: json.data.kategori || [],
-              summary: json.data.summary || null,
-              savedAt: new Date().toISOString(),
-            }));
-          } catch (e) {}
+        if (Array.isArray(json.data.periode) && json.data.periode.length > 0) {
+          setPeriode(json.data.periode);
+          saveToOfflineCache('periode', json.data.periode);
+        }
+        if (Array.isArray(json.data.kategori) && json.data.kategori.length > 0) {
+          setKategori(json.data.kategori);
+          saveToOfflineCache('kategori', json.data.kategori);
         }
 
-        // Jika belum ada periode yang dipilih atau periode tidak ada lagi di daftar, gunakan periode aktif
+        setSyncStatus(json.data.syncStatus || null);
+
+        // Pastikan selectedPeriode valid
         if (json.data.periode && json.data.periode.length > 0) {
           const currentValid = selectedPeriode && json.data.periode.some(
             (p: PeriodeItem) => p.labelPeriode.toLowerCase() === selectedPeriode.toLowerCase() || p.id === selectedPeriode
@@ -429,29 +609,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
       }
     } catch (err) {
-      console.error('Gagal memuat data dari server, beralih ke cache offline:', err);
-      // Fallback ke cache offline browser
-      if (typeof window !== 'undefined') {
-        try {
-          const cachedStr = localStorage.getItem('mmd_offline_cache');
-          if (cachedStr) {
-            const cached = JSON.parse(cachedStr);
-            setPengeluaran(cached.pengeluaran || []);
-            setSubsidi(cached.subsidi || []);
-            setPeriode(cached.periode || []);
-            setKategori(cached.kategori || []);
-            setSummary(cached.summary || null);
-            setSyncStatus({
-              connected: false,
-              spreadsheetName: 'Cache Offline Browser',
-              spreadsheetId: '-',
-              lastSyncTime: cached.savedAt ? new Date(cached.savedAt).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' }) + ' WIB' : 'Offline',
-              error: 'Tidak dapat tersambung ke server. Menampilkan data dari cache lokal browser.',
-              isLocalFallback: true,
-            });
-          }
-        } catch (e) {}
-      }
+      console.warn('Gagal memuat data dari server, menggunakan cache offline:', err);
+      setSyncStatus({
+        connected: false,
+        spreadsheetName: 'Cache Offline Browser',
+        spreadsheetId: '-',
+        lastSyncTime: new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' }) + ' WIB',
+        error: 'Offline. Menggunakan data tersimpan di perangkat.',
+        isLocalFallback: true,
+      });
     } finally {
       setLoading(false);
     }
@@ -509,6 +675,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         closeSubsidyModal,
         removeSubsidiLocally,
         deleteRecord,
+        addSubsidiRecord,
+        updateSubsidiRecord,
+        addPengeluaranBatch,
+        updatePengeluaranRecord,
       }}
     >
       {children}
