@@ -316,6 +316,12 @@ function handleCreatePengeluaran(ss, data) {
     inserted.push(record);
   });
 
+  SpreadsheetApp.flush();
+  try {
+    var cache = CacheService.getScriptCache();
+    if (cache) cache.removeAll(['all_data', 'subsidi_data', 'pengeluaran_data', 'data']);
+  } catch (e) {}
+
   return { success: true, count: inserted.length, data: inserted };
 }
 
@@ -365,6 +371,11 @@ function handleUpdatePengeluaran(ss, item) {
           sheet.getRange(r + 1, colIdx + 1).setValue(updated[key]);
         }
       }
+      SpreadsheetApp.flush();
+      try {
+        var cache = CacheService.getScriptCache();
+        if (cache) cache.removeAll(['all_data', 'subsidi_data', 'pengeluaran_data', 'data']);
+      } catch (e) {}
       return { success: true, id: id, updated: updated };
     }
   }
@@ -462,6 +473,11 @@ function handleCreateSubsidi(ss, item) {
 
   const rowValues = HEADERS.Subsidi.map(function(h) { return record[h]; });
   sheet.appendRow(rowValues);
+  SpreadsheetApp.flush();
+  try {
+    var cache = CacheService.getScriptCache();
+    if (cache) cache.removeAll(['all_data', 'subsidi_data', 'pengeluaran_data', 'data']);
+  } catch (e) {}
 
   return { success: true, data: record };
 }
@@ -516,6 +532,10 @@ function handleUpdateSubsidi(ss, item) {
         }
       }
       SpreadsheetApp.flush();
+      try {
+        var cache = CacheService.getScriptCache();
+        if (cache) cache.removeAll(['all_data', 'subsidi_data', 'pengeluaran_data', 'data']);
+      } catch (e) {}
       return { success: true, id: id, updated: updated };
     }
   }
