@@ -31,8 +31,8 @@ export default function BottomNav() {
   ];
 
   return (
-    <nav className="fixed bottom-0 inset-x-0 z-30 pb-safe bg-surface-container-lowest/90 backdrop-blur-xl shadow-[0_-4px_16px_rgba(15,118,110,0.04)] border-t border-surface-container no-print">
-      <div className="flex justify-around items-center h-16 max-w-[480px] mx-auto px-gutter">
+    <nav className="fixed bottom-0 inset-x-0 z-30 pb-safe bg-surface/95 backdrop-blur-lg border-t border-surface-container-high/90 shadow-[0_-2px_12px_rgba(0,0,0,0.03)] md:hidden no-print">
+      <div className="flex justify-around items-center h-16 max-w-lg mx-auto px-2">
         {navItems.map(item => {
           const isActive = pathname === item.path;
           return (
@@ -46,10 +46,10 @@ export default function BottomNav() {
               }`}
             >
               <div
-                className={`px-3.5 py-1 rounded-full transition-all duration-150 flex items-center justify-center ${
+                className={`px-3.5 py-1 rounded-xl transition-all duration-150 flex items-center justify-center ${
                   isActive
-                    ? 'bg-primary/12 text-primary shadow-xs'
-                    : 'text-on-surface-variant group-hover:bg-surface-container-high/60 group-hover:text-primary'
+                    ? 'bg-primary/10 text-primary font-bold'
+                    : 'text-on-surface-variant group-hover:bg-surface-container/70 group-hover:text-primary'
                 }`}
               >
                 <span
@@ -59,8 +59,8 @@ export default function BottomNav() {
                   {item.icon}
                 </span>
               </div>
-              <span className={`font-label-sm text-[11px] leading-tight font-medium tracking-tight ${
-                isActive ? 'text-primary' : 'text-on-surface-variant'
+              <span className={`text-[11px] leading-tight font-medium tracking-tight ${
+                isActive ? 'text-primary font-bold' : 'text-on-surface-variant'
               }`}>
                 {item.label}
               </span>

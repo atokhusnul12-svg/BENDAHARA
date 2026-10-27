@@ -206,30 +206,32 @@ export default function SubsidyModal() {
       onClick={(e) => {
         if (e.target === e.currentTarget) closeSubsidyModal();
       }}
-      className="fixed inset-0 z-[100] bg-inverse-surface/40 backdrop-blur-sm flex items-end justify-center sm:items-center p-0 sm:p-4 overscroll-contain"
+      className="fixed inset-0 z-[100] bg-ink-900/60 backdrop-blur-sm flex items-end justify-center sm:items-center p-0 sm:p-4 overscroll-contain"
     >
-      <div className="w-full max-w-[480px] bg-surface-container-lowest rounded-t-3xl sm:rounded-2xl shadow-2xl flex flex-col max-h-[90dvh] sm:max-h-[88vh] overflow-hidden animate-in slide-in-from-bottom duration-300">
-        <div className="flex items-center justify-between px-space-md py-space-sm border-b border-surface-container flex-shrink-0 bg-surface-container-lowest">
-
-          <div className="flex items-center gap-2">
-            <span
-              className="material-symbols-outlined text-primary text-[24px]"
-              style={{ fontVariationSettings: "'FILL' 1" }}
-            >
-              volunteer_activism
-            </span>
+      <div className="w-full max-w-lg bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl border border-border flex flex-col max-h-[92dvh] sm:max-h-[88vh] overflow-hidden animate-in slide-in-from-bottom duration-300">
+        {/* Header Modal */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border flex-shrink-0 bg-white">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-forest-50 border border-forest-100 flex items-center justify-center text-forest-700 flex-shrink-0">
+              <span
+                className="material-symbols-outlined text-[22px]"
+                style={{ fontVariationSettings: "'FILL' 1" }}
+              >
+                volunteer_activism
+              </span>
+            </div>
             <div className="flex flex-col">
-              <h2 className="font-headline-md text-headline-md text-on-surface font-bold">
-                {isEditMode ? 'Edit Alokasi Subsidi' : 'Tambah Subsidi Kas'}
+              <h2 className="text-base sm:text-lg text-ink-900 font-bold tracking-tight">
+                {isEditMode ? 'Edit Alokasi Subsidi' : 'Tambah Alokasi Subsidi'}
               </h2>
-              <span className="font-label-sm text-label-sm text-on-surface-variant">
-                Bendahara MMD • Alokasi Amanah
+              <span className="text-xs text-ink-500 font-medium">
+                Bendahara MMD • Alokasi Kas Amanah
               </span>
             </div>
           </div>
           <button
             onClick={closeSubsidyModal}
-            className="w-8 h-8 rounded-full bg-surface-container-low text-on-surface-variant hover:text-on-surface flex items-center justify-center active:scale-95 transition-all"
+            className="w-8 h-8 rounded-full bg-surface-subtle text-ink-500 hover:text-ink-900 hover:bg-neutral-200 flex items-center justify-center active:scale-95 transition-all"
             type="button"
             aria-label="Tutup"
           >
@@ -238,168 +240,168 @@ export default function SubsidyModal() {
         </div>
 
         <form onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0 overflow-hidden">
-          <div className="flex-1 overflow-y-auto overscroll-contain p-space-md flex flex-col gap-space-md">
+          <div className="flex-1 overflow-y-auto overscroll-contain p-5 flex flex-col gap-4">
             {errorMessage && (
-              <div className="bg-error-container text-on-error-container p-3 rounded-xl flex items-center gap-2 text-body-sm">
-                <span className="material-symbols-outlined text-[20px] text-error flex-shrink-0">
+              <div className="bg-red-50 text-red-800 p-3.5 rounded-xl border border-red-200 flex items-center gap-2.5 text-xs sm:text-sm animate-in fade-in">
+                <span className="material-symbols-outlined text-[20px] text-red-600 flex-shrink-0">
                   error
                 </span>
-                <span className="font-medium">{errorMessage}</span>
+                <span className="font-medium leading-relaxed">{errorMessage}</span>
               </div>
             )}
 
             {/* Kategori Divisi */}
-          <div className="flex flex-col gap-1.5">
-            <div className="flex items-center justify-between">
-              <label className="font-label-sm text-label-sm text-on-surface-variant uppercase font-semibold">
-                Kategori Divisi
-              </label>
-              <button
-                type="button"
-                onClick={() => setIsAddingCategory(prev => !prev)}
-                className="text-primary hover:text-primary-container font-label-sm text-xs font-semibold flex items-center gap-0.5 active:scale-95"
-              >
-                <span className="material-symbols-outlined text-[15px]">
-                  {isAddingCategory ? 'close' : 'add'}
-                </span>
-                <span>{isAddingCategory ? 'Batal' : '+ Kategori Baru'}</span>
-              </button>
-            </div>
-
-            {isAddingCategory && (
-              <div className="flex items-center gap-2 p-2 bg-surface-container rounded-xl border border-primary/20 animate-in fade-in duration-200">
-                <input
-                  type="text"
-                  placeholder="Nama divisi/kategori baru..."
-                  value={newCategoryName}
-                  onChange={e => setNewCategoryName(e.target.value)}
-                  className="flex-1 h-9 px-3 rounded-lg bg-surface-container-lowest text-on-surface font-body-sm text-xs border border-surface-container focus:outline-none focus:ring-1 focus:ring-primary font-medium"
-                />
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold uppercase tracking-wider text-ink-600">
+                  Kategori Divisi Pos Anggaran
+                </label>
                 <button
                   type="button"
-                  disabled={creatingCategory || !newCategoryName.trim()}
-                  onClick={handleQuickCreateCategory}
-                  className="h-9 px-3 rounded-lg bg-primary text-on-primary font-label-sm text-xs font-semibold flex items-center gap-1 active:scale-95 disabled:opacity-50"
+                  onClick={() => setIsAddingCategory(prev => !prev)}
+                  className="text-forest-700 hover:text-forest-800 text-xs font-semibold flex items-center gap-1 active:scale-95 transition-colors"
                 >
-                  <span className="material-symbols-outlined text-[14px]">save</span>
-                  <span>{creatingCategory ? 'Menyimpan...' : 'Simpan'}</span>
+                  <span className="material-symbols-outlined text-[15px]">
+                    {isAddingCategory ? 'close' : 'add'}
+                  </span>
+                  <span>{isAddingCategory ? 'Batal' : '+ Kategori Baru'}</span>
                 </button>
               </div>
-            )}
 
-            <div className="relative w-full">
-              <select
-                className="w-full h-12 px-3 pr-8 rounded-xl bg-surface-container-low font-body-md text-body-md text-on-surface appearance-none focus:outline-none focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary/25 transition-all font-medium"
-                value={kategoriNama}
-                onChange={e => {
-                  if (e.target.value === '__NEW__') {
-                    setIsAddingCategory(true);
-                  } else {
-                    setKategoriNama(e.target.value);
-                  }
-                }}
-              >
-                {kategori
-                  .filter(k => k.statusAktif)
-                  .map(k => (
-                    <option key={k.id} value={k.namaKategori}>
-                      {k.namaKategori}
+              {isAddingCategory && (
+                <div className="flex items-center gap-2 p-2.5 bg-forest-50/50 rounded-xl border border-forest-200 animate-in fade-in duration-200">
+                  <input
+                    type="text"
+                    placeholder="Nama divisi/kategori baru..."
+                    value={newCategoryName}
+                    onChange={e => setNewCategoryName(e.target.value)}
+                    className="flex-1 h-9 px-3 rounded-lg bg-white text-ink-900 text-xs border border-border focus:outline-none focus:ring-1 focus:ring-forest-600 font-medium"
+                  />
+                  <button
+                    type="button"
+                    disabled={creatingCategory || !newCategoryName.trim()}
+                    onClick={handleQuickCreateCategory}
+                    className="h-9 px-3.5 rounded-lg bg-forest-600 text-white text-xs font-semibold flex items-center gap-1.5 active:scale-95 disabled:opacity-50 hover:bg-forest-700 transition-colors"
+                  >
+                    <span className="material-symbols-outlined text-[14px]">save</span>
+                    <span>{creatingCategory ? 'Menyimpan...' : 'Simpan'}</span>
+                  </button>
+                </div>
+              )}
+
+              <div className="relative w-full">
+                <select
+                  className="w-full h-11 pl-3 pr-9 rounded-xl bg-surface-subtle font-medium text-xs sm:text-sm text-ink-900 border border-border appearance-none focus:outline-none focus:bg-white focus:border-forest-600 focus:ring-2 focus:ring-forest-600/15 transition-all"
+                  value={kategoriNama}
+                  onChange={e => {
+                    if (e.target.value === '__NEW__') {
+                      setIsAddingCategory(true);
+                    } else {
+                      setKategoriNama(e.target.value);
+                    }
+                  }}
+                >
+                  {kategori
+                    .filter(k => k.statusAktif)
+                    .map(k => (
+                      <option key={k.id} value={k.namaKategori}>
+                        {k.namaKategori}
+                      </option>
+                    ))}
+                  <option value="__NEW__">+ Tambah Kategori Baru...</option>
+                </select>
+                <span className="material-symbols-outlined text-[20px] text-ink-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                  arrow_drop_down
+                </span>
+              </div>
+            </div>
+
+            {/* Periode Hijriyah */}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-semibold uppercase tracking-wider text-ink-600">
+                Periode Hijriyah
+              </label>
+              <div className="relative w-full">
+                <select
+                  className="w-full h-11 px-3 pr-9 rounded-xl bg-surface-subtle font-medium text-xs sm:text-sm text-ink-900 border border-border appearance-none focus:outline-none focus:bg-white focus:border-forest-600 focus:ring-2 focus:ring-forest-600/15 transition-all"
+                  value={periodeLabel}
+                  onChange={e => setPeriodeLabel(e.target.value)}
+                >
+                  {periode.map(p => (
+                    <option key={p.id} value={p.labelPeriode}>
+                      {p.labelPeriode} {p.statusAktif ? '(Aktif)' : ''}
                     </option>
                   ))}
-                <option value="__NEW__">+ Tambah Kategori Baru...</option>
-              </select>
-              <span className="material-symbols-outlined text-[20px] text-on-surface-variant absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
-                arrow_drop_down
-              </span>
-            </div>
-          </div>
-
-          {/* Periode Hijriyah */}
-          <div className="flex flex-col gap-1.5">
-            <label className="font-label-sm text-label-sm text-on-surface-variant uppercase font-semibold">
-              Periode Hijriyah
-            </label>
-            <div className="relative w-full">
-              <select
-                className="w-full h-12 px-3 pr-8 rounded-xl bg-surface-container-low font-body-md text-body-md text-on-surface appearance-none focus:outline-none focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary/25 transition-all font-medium"
-                value={periodeLabel}
-                onChange={e => setPeriodeLabel(e.target.value)}
-              >
-                {periode.map(p => (
-                  <option key={p.id} value={p.labelPeriode}>
-                    {p.labelPeriode} {p.statusAktif ? '(Aktif)' : ''}
-                  </option>
-                ))}
-              </select>
-              <span className="material-symbols-outlined text-[20px] text-on-surface-variant absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
-                calendar_month
-              </span>
-            </div>
-          </div>
-
-          {/* Tanggal Subsidi Masuk */}
-          <div className="flex flex-col gap-1.5">
-            <label className="font-label-sm text-label-sm text-on-surface-variant uppercase font-semibold">
-              Tanggal Subsidi Masuk
-            </label>
-            <input
-              type="date"
-              className="w-full h-12 px-3 rounded-xl bg-surface-container-low font-body-md text-body-md text-on-surface focus:outline-none focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary/25 transition-all font-medium"
-              value={tanggalTransaksi}
-              onChange={e => setTanggalTransaksi(e.target.value)}
-              required
-            />
-          </div>
-
-          {/* Nominal Subsidi */}
-          <div className="flex flex-col gap-1.5">
-            <label className="font-label-sm text-label-sm text-on-surface-variant uppercase font-semibold">
-              Nominal Subsidi
-            </label>
-            <div className="flex items-center rounded-xl bg-surface-container-low overflow-hidden focus-within:bg-surface-container-lowest focus-within:ring-2 focus-within:ring-primary/25 border border-surface-container">
-              <div className="px-3.5 h-12 flex items-center justify-center bg-surface-container text-primary font-bold font-label-lg text-label-lg flex-shrink-0">
-                Rp
+                </select>
+                <span className="material-symbols-outlined text-[20px] text-ink-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                  calendar_month
+                </span>
               </div>
+            </div>
+
+            {/* Tanggal Subsidi Masuk */}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-semibold uppercase tracking-wider text-ink-600">
+                Tanggal Subsidi Masuk
+              </label>
               <input
-                className="w-full h-12 px-3 bg-transparent text-on-surface font-title-currency-md text-title-currency-md font-bold focus:outline-none text-left"
-                placeholder="0"
-                type="text"
-                value={nominal === 0 ? '' : formatNumber(nominal)}
-                onChange={e => setNominal(parseRupiah(e.target.value))}
+                type="date"
+                className="w-full h-11 px-3 rounded-xl bg-surface-subtle font-medium text-xs sm:text-sm text-ink-900 border border-border focus:outline-none focus:bg-white focus:border-forest-600 focus:ring-2 focus:ring-forest-600/15 transition-all"
+                value={tanggalTransaksi}
+                onChange={e => setTanggalTransaksi(e.target.value)}
                 required
+              />
+            </div>
+
+            {/* Nominal Subsidi */}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-semibold uppercase tracking-wider text-ink-600">
+                Nominal Alokasi Subsidi
+              </label>
+              <div className="flex items-center rounded-xl bg-surface-subtle overflow-hidden focus-within:bg-white focus-within:ring-2 focus-within:ring-forest-600/20 border border-border focus-within:border-forest-600 transition-all">
+                <div className="px-3.5 h-12 flex items-center justify-center bg-forest-50 text-forest-800 font-bold text-sm border-r border-border flex-shrink-0">
+                  Rp
+                </div>
+                <input
+                  className="w-full h-12 px-3 bg-transparent text-ink-900 font-bold text-base sm:text-lg tabular-nums focus:outline-none text-left"
+                  placeholder="0"
+                  type="text"
+                  value={nominal === 0 ? '' : formatNumber(nominal)}
+                  onChange={e => setNominal(parseRupiah(e.target.value))}
+                  required
+                />
+              </div>
+            </div>
+
+            {/* Catatan / Keterangan */}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-semibold uppercase tracking-wider text-ink-600">
+                Keterangan / Sumber Dana
+              </label>
+              <input
+                type="text"
+                className="w-full h-11 px-3 rounded-xl bg-surface-subtle font-medium text-xs sm:text-sm text-ink-900 border border-border focus:outline-none focus:bg-white focus:border-forest-600 focus:ring-2 focus:ring-forest-600/15 transition-all"
+                placeholder="Contoh: Subsidi Kas MMD Tahap I, Donasi alumni"
+                value={catatan}
+                onChange={e => setCatatan(e.target.value)}
               />
             </div>
           </div>
 
-          {/* Catatan / Keterangan */}
-          <div className="flex flex-col gap-1.5">
-            <label className="font-label-sm text-label-sm text-on-surface-variant uppercase font-semibold">
-              Keterangan / Sumber Dana
-            </label>
-            <input
-              type="text"
-              className="w-full h-12 px-3 rounded-xl bg-surface-container-low font-body-md text-body-md text-on-surface focus:outline-none focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary/25 transition-all"
-              placeholder="Contoh: Subsidi Kas MMD Tahap I, Donasi alumni"
-              value={catatan}
-              onChange={e => setCatatan(e.target.value)}
-            />
-            </div>
-          </div>
-
-          <div className="p-space-md border-t border-surface-container flex-shrink-0 bg-surface-container-lowest pb-[max(1rem,env(safe-area-inset-bottom))]">
-            <div className="grid grid-cols-2 gap-space-sm">
+          <div className="p-4 border-t border-border flex-shrink-0 bg-white pb-[max(1rem,env(safe-area-inset-bottom))]">
+            <div className="grid grid-cols-2 gap-3">
               <button
                 type="button"
                 onClick={closeSubsidyModal}
                 disabled={saving}
-                className="h-12 rounded-xl bg-surface-container text-on-surface font-label-lg text-label-lg active:scale-95 transition-all font-semibold"
+                className="h-11 rounded-xl bg-surface-subtle hover:bg-neutral-200 text-ink-800 border border-border font-medium text-sm active:scale-95 transition-all"
               >
                 Batal
               </button>
               <button
                 type="submit"
                 disabled={saving}
-                className="h-12 rounded-xl bg-primary text-on-primary font-label-lg text-label-lg shadow-md active:scale-95 transition-all flex items-center justify-center gap-2 font-semibold disabled:opacity-60"
+                className="h-11 rounded-xl bg-forest-600 hover:bg-forest-700 text-white font-semibold text-sm shadow-sm active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-60"
               >
                 {saving ? (
                   <>

@@ -61,51 +61,30 @@ export default function SubsidiPage() {
   };
 
   return (
-    <div className="flex flex-col w-full space-y-5 pt-2">
-      {/* Header & Sync Status Badge */}
-      <div className="flex flex-col gap-2 pt-1">
-        <div className="flex items-center justify-between">
-          <span className="font-headline-lg text-headline-lg text-primary font-bold tracking-tight">
-            Kelola Subsidi
-          </span>
-          <div
-            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full shadow-sm ${
-              syncStatus?.connected
-                ? 'bg-tertiary-fixed text-on-tertiary-fixed'
-                : 'bg-amber-100 text-amber-900'
-            }`}
-          >
-            <span className="relative flex h-2 w-2">
-              <span
-                className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
-                  syncStatus?.connected ? 'bg-tertiary-container' : 'bg-amber-500'
-                }`}
-              ></span>
-              <span
-                className={`relative inline-flex rounded-full h-2 w-2 ${
-                  syncStatus?.connected ? 'bg-tertiary' : 'bg-amber-600'
-                }`}
-              ></span>
+    <div className="flex flex-col w-full space-y-6">
+      {/* 1. Header Pengelolaan & Status Sinkronisasi */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 sm:p-5 rounded-2xl shadow-xs border border-surface-variant">
+        <div className="flex flex-col min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="font-headline-md text-lg sm:text-xl font-bold text-on-surface tracking-tight">
+              Pengelolaan Subsidi Kas
             </span>
-            <span className="material-symbols-outlined text-[14px]">
-              {syncStatus?.connected ? 'check_circle' : 'cloud_off'}
-            </span>
-            <span className="font-label-sm text-label-sm font-semibold">
-              {syncStatus?.connected ? 'Tersinkron GSheets' : 'Mode Lokal'}
+            <span className="text-xs px-2 py-0.5 rounded-md font-semibold bg-primary/8 text-primary border border-primary/15">
+              MMD Pesantren
             </span>
           </div>
+          <p className="text-xs text-on-surface-variant font-medium mt-1">
+            Alokasi plafon dan distribusi dana kas organisasi periode{' '}
+            <strong className="text-primary font-bold">{selectedPeriode}</strong>
+          </p>
         </div>
 
-        <div className="flex items-center justify-between">
-          <p className="font-body-sm text-body-sm text-on-surface-variant">
-            Alokasi dana kas organisasi periode{' '}
-            <strong className="text-primary font-semibold">{selectedPeriode}</strong>
-          </p>
-
+        <div className="flex items-center gap-2.5">
           <select
-            className="text-xs bg-surface-container-low px-2 py-1 rounded-lg border border-surface-container font-semibold text-primary focus:outline-none"
+            className="h-10 px-3 bg-surface-container/60 rounded-xl border border-surface-variant text-xs font-bold text-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
             value={selectedPeriode}
             onChange={e => setSelectedPeriode(e.target.value)}
+            aria-label="Pilih Periode Subsidi"
           >
             {periode.map(p => (
               <option key={p.id} value={p.labelPeriode}>
@@ -113,170 +92,209 @@ export default function SubsidiPage() {
               </option>
             ))}
           </select>
+
+          <div
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border ${
+              syncStatus?.connected
+                ? 'bg-emerald-50 text-emerald-900 border-emerald-200'
+                : 'bg-amber-50 text-amber-900 border-amber-200'
+            }`}
+          >
+            <span
+              className={`w-2 h-2 rounded-full ${
+                syncStatus?.connected ? 'bg-emerald-600' : 'bg-amber-500'
+              }`}
+            />
+            <span className="hidden sm:inline">
+              {syncStatus?.connected ? 'Tersinkron' : 'Lokal'}
+            </span>
+          </div>
         </div>
       </div>
 
-      {/* Category Subsidy Cards */}
+      {/* 2. Kartu Alokasi Subsidi Tiap Lajnah (Responsive Grid) */}
       <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <span className="font-headline-md text-base sm:text-lg font-bold text-on-surface">
+            Plafon Subsidi Tiap Lajnah
+          </span>
+          <span className="text-xs text-on-surface-variant font-medium">
+            {summary?.categories?.length || 0} Divisi Aktif
+          </span>
+        </div>
+
         {summary?.categories && summary.categories.length > 0 ? (
-          summary.categories.map(cat => {
-            const pct = cat.persentasePenggunaan;
-            const barColor =
-              pct > 90
-                ? 'bg-error'
-                : pct > 75
-                ? 'bg-secondary-container'
-                : 'bg-primary';
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {summary.categories.map(cat => {
+              const pct = cat.persentasePenggunaan;
+              const barColor =
+                pct > 90
+                  ? 'bg-rose-600'
+                  : pct > 75
+                  ? 'bg-amber-600'
+                  : 'bg-primary';
 
-            return (
-              <div
-                key={cat.kategoriId}
-                className="bg-surface-container-lowest rounded-xl p-4 shadow-[0_4px_20px_-2px_rgba(15,118,110,0.06),0_2px_6px_-1px_rgba(0,0,0,0.04)] border border-surface-container transition-all"
-              >
-                <div className="flex items-start justify-between gap-2 mb-2">
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="w-9 h-9 rounded-lg bg-surface-container flex items-center justify-center text-primary flex-shrink-0">
-                      <span className="material-symbols-outlined text-[20px]">
-                        account_balance
-                      </span>
+              return (
+                <div
+                  key={cat.kategoriId}
+                  className="bg-white rounded-2xl p-4 sm:p-5 shadow-xs border border-surface-variant flex flex-col justify-between hover:border-primary/30 transition-colors"
+                >
+                  <div>
+                    <div className="flex items-start justify-between gap-2 mb-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-10 h-10 rounded-xl bg-surface-container flex items-center justify-center text-primary font-bold flex-shrink-0">
+                          <span className="material-symbols-outlined text-[22px]">
+                            account_balance
+                          </span>
+                        </div>
+                        <div className="min-w-0">
+                          <h2 className="text-sm sm:text-base font-bold text-on-surface truncate">
+                            {cat.kategoriNama}
+                          </h2>
+                          <span className="text-xs text-on-surface-variant font-medium">
+                            Plafon Masuk: <strong className="text-primary tabular-nums">{formatRupiah(cat.totalSubsidi)}</strong>
+                          </span>
+                        </div>
+                      </div>
+
+                      <button
+                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-primary/8 text-primary hover:bg-primary/15 text-xs font-semibold active:scale-95 transition-all flex-shrink-0 border border-primary/15"
+                        onClick={() => openSubsidyModal({ kategoriNama: cat.kategoriNama } as any)}
+                        type="button"
+                      >
+                        <span className="material-symbols-outlined text-[15px]">add</span>
+                        <span>Tambah</span>
+                      </button>
                     </div>
-                    <div className="min-w-0">
-                      <h2 className="font-label-lg text-label-lg text-on-surface font-bold truncate">
-                        {cat.kategoriNama}
-                      </h2>
-                      <span className="font-body-sm text-body-sm text-on-surface-variant">
-                        Total Subsidi: <strong>{formatRupiah(cat.totalSubsidi)}</strong>
-                      </span>
+
+                    {/* Progress Bar Penggunaan Subsidi */}
+                    <div className="space-y-1.5 mb-2">
+                      <div className="w-full bg-surface-container rounded-full h-2 overflow-hidden flex">
+                        <div
+                          className={`${barColor} h-2 rounded-full transition-all duration-500`}
+                          style={{ width: `${Math.min(100, Math.max(0, pct))}%` }}
+                        />
+                      </div>
+                      <div className="flex items-center justify-between text-xs font-medium">
+                        <span className="text-on-surface-variant">
+                          Terpakai: <strong className="text-rose-700 tabular-nums">{formatRupiah(cat.totalPengeluaran)}</strong> ({pct}%)
+                        </span>
+                        <span
+                          className={`font-bold tabular-nums ${
+                            cat.saldoTersisa < 0 ? 'text-rose-700' : 'text-primary'
+                          }`}
+                        >
+                          Sisa {formatRupiah(cat.saldoTersisa)}
+                        </span>
+                      </div>
                     </div>
                   </div>
-
-                  <button
-                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-surface-container-low text-primary hover:bg-surface-container font-label-sm text-label-sm active:scale-95 transition-transform flex-shrink-0 font-semibold"
-                    onClick={() => openSubsidyModal({ kategoriNama: cat.kategoriNama } as any)}
-                    type="button"
-                  >
-                    <span className="material-symbols-outlined text-[16px]">add</span>
-                    <span>Tambah</span>
-                  </button>
                 </div>
-
-                {/* Progress / Usage Bar */}
-                <div className="space-y-1.5 mt-3">
-                  <div className="w-full bg-surface-container-high rounded-full h-2 overflow-hidden flex">
-                    <div
-                      className={`${barColor} h-2 rounded-full transition-all duration-500`}
-                      style={{ width: `${Math.min(100, Math.max(0, pct))}%` }}
-                    />
-                  </div>
-                  <div className="flex items-center justify-between font-label-sm text-label-sm">
-                    <span className="text-on-surface-variant">
-                      Terpakai: <strong className="text-error font-medium">{formatRupiah(cat.totalPengeluaran)}</strong> ({pct}%)
-                    </span>
-                    <span
-                      className={`font-semibold ${
-                        cat.saldoTersisa < 0 ? 'text-error' : 'text-tertiary'
-                      }`}
-                    >
-                      Sisa {formatRupiah(cat.saldoTersisa)}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            );
-          })
+              );
+            })}
+          </div>
         ) : (
-          <div className="bg-surface-container-lowest rounded-xl p-6 text-center text-on-surface-variant text-sm border border-surface-container">
-            Belum ada kategori aktif.
+          <div className="bg-white rounded-2xl p-8 text-center text-on-surface-variant text-sm border border-surface-variant">
+            Belum ada kategori aktif untuk periode ini.
           </div>
         )}
       </div>
 
-      {/* Primary Trigger Button */}
+      {/* 3. Tombol Utama Tambah Subsidi */}
       <button
-        className="w-full h-12 bg-primary text-on-primary rounded-xl font-label-lg text-label-lg font-semibold flex items-center justify-center gap-2 shadow-md active:scale-[0.98] transition-all hover:bg-primary-container"
+        className="w-full h-12 bg-primary hover:bg-primary-container text-white rounded-xl text-sm font-semibold flex items-center justify-center gap-2 shadow-xs active:scale-[0.99] transition-all"
         onClick={() => openSubsidyModal()}
         type="button"
       >
         <span className="material-symbols-outlined text-[20px]">add_circle</span>
-        <span>+ Tambah Subsidi / Alokasi Dana</span>
+        <span>+ Tambah Subsidi / Alokasi Dana Kas</span>
       </button>
 
-      {/* Riwayat Penambahan Subsidi */}
-      <div className="flex flex-col gap-space-sm pt-2">
+      {/* 4. Riwayat Penambahan Subsidi */}
+      <div className="flex flex-col space-y-3 pb-8">
         <div className="flex items-center justify-between px-1">
-          <span className="font-headline-md text-sm font-bold text-on-surface flex items-center gap-1.5">
-            <span className="material-symbols-outlined text-[18px] text-primary">history</span>
-            Riwayat Penambahan Subsidi ({currentPeriodSubsidies.length})
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="font-headline-md text-base sm:text-lg font-bold text-on-surface flex items-center gap-1.5">
+              <span className="material-symbols-outlined text-[19px] text-primary">history</span>
+              Riwayat Penambahan Subsidi ({currentPeriodSubsidies.length})
+            </span>
+          </div>
           <span className="text-xs text-on-surface-variant font-medium">
             Periode {selectedPeriode}
           </span>
         </div>
 
         {currentPeriodSubsidies.length > 0 ? (
-          currentPeriodSubsidies.map(item => (
-            <div
-              key={item.id}
-              className="bg-surface-container-lowest rounded-xl p-3 shadow-sm border border-surface-container flex items-center justify-between gap-2"
-            >
-              <div className="flex flex-col min-w-0">
-                <div className="flex items-center gap-1.5">
-                  <span className="font-bold text-on-surface text-sm">{item.kategoriNama}</span>
-                  <span className="text-[11px] text-on-surface-variant">
-                    • {formatTanggal(item.tanggalTransaksi)}
-                  </span>
-                </div>
-                {item.catatan && (
-                  <p className="text-xs text-on-surface-variant italic truncate mt-0.5">
-                    {item.catatan}
-                  </p>
-                )}
-              </div>
-
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <div className="flex flex-col items-end">
-                  <span className="font-title-currency-md text-sm font-bold text-primary">
-                    + {formatRupiah(item.nominal)}
-                  </span>
-                  {item.syncStatus === 'synced' ? (
-                    <span className="text-[10px] text-emerald-700 font-semibold flex items-center gap-0.5">
-                      <span className="material-symbols-outlined text-[11px]">done_all</span>
-                      Tersinkron
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {currentPeriodSubsidies.map(item => (
+              <div
+                key={item.id}
+                className="bg-white rounded-xl p-3.5 shadow-xs border border-surface-variant flex items-center justify-between gap-3 hover:border-primary/30 transition-colors"
+              >
+                <div className="flex flex-col min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-on-surface text-sm truncate">{item.kategoriNama}</span>
+                    <span className="text-xs text-on-surface-variant tabular-nums">
+                      • {formatTanggal(item.tanggalTransaksi)}
                     </span>
-                  ) : item.syncStatus === 'pending' ? (
-                    <span className="text-[10px] text-amber-700 font-semibold flex items-center gap-0.5">
-                      <span className="material-symbols-outlined text-[11px]">schedule</span>
-                      Menunggu Sinkron
-                    </span>
-                  ) : (
-                    <span className="text-[10px] text-rose-700 font-semibold flex items-center gap-0.5">
-                      <span className="material-symbols-outlined text-[11px]">error</span>
-                      Gagal
-                    </span>
+                  </div>
+                  {item.catatan && (
+                    <p className="text-xs text-on-surface-variant italic truncate mt-0.5">
+                      {item.catatan}
+                    </p>
                   )}
                 </div>
-                <button
-                  type="button"
-                  onClick={() => openSubsidyModal(item)}
-                  className="w-8 h-8 rounded-lg bg-surface-container-low text-primary hover:bg-surface-container flex items-center justify-center active:scale-95"
-                  title="Edit Subsidi"
-                >
-                  <span className="material-symbols-outlined text-[16px]">edit</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleDeleteClick(item)}
-                  className="w-8 h-8 rounded-lg bg-error-container/30 text-error hover:bg-error-container/60 flex items-center justify-center active:scale-95"
-                  title="Hapus Subsidi"
-                >
-                  <span className="material-symbols-outlined text-[16px]">delete</span>
-                </button>
+
+                <div className="flex items-center gap-2.5 flex-shrink-0">
+                  <div className="flex flex-col items-end">
+                    <span className="text-sm sm:text-base font-bold text-emerald-700 tabular-nums">
+                      + {formatRupiah(item.nominal)}
+                    </span>
+                    {item.syncStatus === 'synced' ? (
+                      <span className="text-[11px] text-emerald-700 font-semibold flex items-center gap-0.5">
+                        <span className="material-symbols-outlined text-[12px]">done_all</span>
+                        Tersinkron
+                      </span>
+                    ) : item.syncStatus === 'pending' ? (
+                      <span className="text-[11px] text-amber-700 font-semibold flex items-center gap-0.5">
+                        <span className="material-symbols-outlined text-[12px]">schedule</span>
+                        Menunggu
+                      </span>
+                    ) : (
+                      <span className="text-[11px] text-rose-700 font-semibold flex items-center gap-0.5">
+                        <span className="material-symbols-outlined text-[12px]">error</span>
+                        Gagal
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => openSubsidyModal(item)}
+                      className="w-8 h-8 rounded-lg bg-surface-container text-primary hover:bg-surface-container-high flex items-center justify-center active:scale-95 transition-colors"
+                      title="Edit Subsidi"
+                      aria-label="Edit Subsidi"
+                    >
+                      <span className="material-symbols-outlined text-[16px]">edit</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteClick(item)}
+                      className="w-8 h-8 rounded-lg bg-rose-50 text-rose-700 hover:bg-rose-100 flex items-center justify-center active:scale-95 transition-colors border border-rose-200/50"
+                      title="Hapus Subsidi"
+                      aria-label="Hapus Subsidi"
+                    >
+                      <span className="material-symbols-outlined text-[16px]">delete</span>
+                    </button>
+                  </div>
+                </div>
               </div>
-            </div>
-          ))
+            ))}
+          </div>
         ) : (
-          <div className="bg-surface-container-lowest rounded-xl p-6 text-center text-on-surface-variant text-xs border border-surface-container">
-            Belum ada catatan subsidi pada periode ini. Klik tombol di atas untuk menambahkan subsidi kas.
+          <div className="bg-white rounded-2xl p-8 text-center text-on-surface-variant text-xs sm:text-sm border border-surface-variant">
+            Belum ada catatan penambahan subsidi pada periode ini. Klik tombol di atas untuk menambahkan subsidi kas baru.
           </div>
         )}
       </div>

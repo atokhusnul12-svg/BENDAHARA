@@ -341,31 +341,32 @@ export default function ExpenseModal() {
       onClick={(e) => {
         if (e.target === e.currentTarget) closeExpenseModal();
       }}
-      className="fixed inset-0 z-[100] bg-inverse-surface/40 backdrop-blur-sm flex items-end justify-center sm:items-center p-0 sm:p-4 overscroll-contain"
+      className="fixed inset-0 z-[100] bg-ink-900/60 backdrop-blur-sm flex items-end justify-center sm:items-center p-0 sm:p-4 overscroll-contain"
     >
-      <div className="w-full max-w-[480px] bg-surface-container-lowest rounded-t-3xl sm:rounded-2xl shadow-2xl flex flex-col max-h-[90dvh] sm:max-h-[88vh] overflow-hidden animate-in slide-in-from-bottom duration-300">
+      <div className="w-full max-w-lg bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl border border-border flex flex-col max-h-[92dvh] sm:max-h-[88vh] overflow-hidden animate-in slide-in-from-bottom duration-300">
         {/* Header Modal */}
-        <div className="flex items-center justify-between px-space-md py-space-sm border-b border-surface-container flex-shrink-0 bg-surface-container-lowest">
-
-          <div className="flex items-center gap-2">
-            <span
-              className="material-symbols-outlined text-primary text-[24px]"
-              style={{ fontVariationSettings: "'FILL' 1" }}
-            >
-              {expenseToEdit ? 'edit_note' : 'add_circle'}
-            </span>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border flex-shrink-0 bg-white">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-forest-50 border border-forest-100 flex items-center justify-center text-forest-700 flex-shrink-0">
+              <span
+                className="material-symbols-outlined text-[22px]"
+                style={{ fontVariationSettings: "'FILL' 1" }}
+              >
+                {expenseToEdit ? 'edit_note' : 'add_circle'}
+              </span>
+            </div>
             <div className="flex flex-col">
-              <h2 className="font-headline-md text-headline-md text-on-surface font-bold">
-                {expenseToEdit ? 'Edit Transaksi Pengeluaran' : 'Tambah Pengeluaran'}
+              <h2 className="text-base sm:text-lg text-ink-900 font-bold tracking-tight">
+                {expenseToEdit ? 'Edit Transaksi Pengeluaran' : 'Catat Pengeluaran Baru'}
               </h2>
-              <span className="font-label-sm text-label-sm text-on-surface-variant">
+              <span className="text-xs text-ink-500 font-medium">
                 Bendahara MMD • Pesantren MMD
               </span>
             </div>
           </div>
           <button
             onClick={closeExpenseModal}
-            className="w-8 h-8 rounded-full bg-surface-container-low text-on-surface-variant hover:text-on-surface flex items-center justify-center active:scale-95 transition-all"
+            className="w-8 h-8 rounded-full bg-surface-subtle text-ink-500 hover:text-ink-900 hover:bg-neutral-200 flex items-center justify-center active:scale-95 transition-all"
             type="button"
             aria-label="Tutup"
           >
@@ -376,367 +377,371 @@ export default function ExpenseModal() {
         {/* Form */}
         <form onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0 overflow-hidden">
           {/* Scrollable Content Body */}
-          <div className="flex-1 overflow-y-auto overscroll-contain p-space-md flex flex-col gap-space-md">
+          <div className="flex-1 overflow-y-auto overscroll-contain p-5 flex flex-col gap-4">
             {/* Error Alert if any */}
             {errorMessage && (
-              <div className="bg-error-container text-on-error-container p-3 rounded-xl flex items-center gap-2 text-body-sm">
-                <span className="material-symbols-outlined text-[20px] text-error flex-shrink-0">
+              <div className="bg-red-50 text-red-800 p-3.5 rounded-xl border border-red-200 flex items-center gap-2.5 text-xs sm:text-sm animate-in fade-in">
+                <span className="material-symbols-outlined text-[20px] text-red-600 flex-shrink-0">
                   error
                 </span>
-                <span className="font-medium">{errorMessage}</span>
+                <span className="font-medium leading-relaxed">{errorMessage}</span>
               </div>
             )}
 
-            {/* 1. Kategori Kegiatan */}
-          <div className="flex flex-col gap-1.5">
-            <div className="flex items-center justify-between">
-              <label className="font-label-lg text-label-lg text-on-surface font-semibold">
-                1. Kategori Kegiatan
-              </label>
-              <button
-                type="button"
-                onClick={() => setIsAddingCategory(prev => !prev)}
-                className="text-primary hover:text-primary-container font-label-sm text-xs font-semibold flex items-center gap-0.5 active:scale-95"
-              >
-                <span className="material-symbols-outlined text-[15px]">
-                  {isAddingCategory ? 'close' : 'add'}
-                </span>
-                <span>{isAddingCategory ? 'Batal' : '+ Kategori Baru'}</span>
-              </button>
-            </div>
-
-            {isAddingCategory && (
-              <div className="flex items-center gap-2 p-2 bg-surface-container rounded-xl border border-primary/20 animate-in fade-in duration-200">
-                <input
-                  type="text"
-                  placeholder="Nama divisi/kategori baru..."
-                  value={newCategoryName}
-                  onChange={e => setNewCategoryName(e.target.value)}
-                  className="flex-1 h-9 px-3 rounded-lg bg-surface-container-lowest text-on-surface font-body-sm text-xs border border-surface-container focus:outline-none focus:ring-1 focus:ring-primary font-medium"
-                />
-                <button
-                  type="button"
-                  disabled={creatingCategory || !newCategoryName.trim()}
-                  onClick={handleQuickCreateCategory}
-                  className="h-9 px-3 rounded-lg bg-primary text-on-primary font-label-sm text-xs font-semibold flex items-center gap-1 active:scale-95 disabled:opacity-50"
-                >
-                  <span className="material-symbols-outlined text-[14px]">save</span>
-                  <span>{creatingCategory ? 'Menyimpan...' : 'Simpan'}</span>
-                </button>
-              </div>
-            )}
-
-            <div className="relative w-full">
-              <div className="absolute left-3 top-1/2 -translate-y-1/2 text-primary flex items-center pointer-events-none">
-                <span
-                  className="material-symbols-outlined text-[20px]"
-                  style={{ fontVariationSettings: "'FILL' 1" }}
-                >
-                  account_balance
-                </span>
-              </div>
-              <select
-                className="w-full h-12 pl-10 pr-9 rounded-xl bg-surface-container-low font-body-md text-body-md text-on-surface appearance-none focus:outline-none focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary/25 transition-all font-medium"
-                value={kategoriNama}
-                onChange={e => {
-                  if (e.target.value === '__NEW__') {
-                    setIsAddingCategory(true);
-                  } else {
-                    setKategoriNama(e.target.value);
-                  }
-                }}
-              >
-                {kategori
-                  .filter(k => k.statusAktif)
-                  .map(k => (
-                    <option key={k.id} value={k.namaKategori}>
-                      {k.namaKategori}
-                    </option>
-                  ))}
-                <option value="__NEW__">+ Tambah Kategori Baru...</option>
-              </select>
-              <span className="material-symbols-outlined text-[20px] text-on-surface-variant absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
-                arrow_drop_down
-              </span>
-            </div>
-          </div>
-
-          {/* 2. Periode & Tanggal side-by-side */}
-          <div className="grid grid-cols-2 gap-space-sm">
+            {/* 1. Jenis Acara / Kegiatan (Paling Atas) */}
             <div className="flex flex-col gap-1.5">
-              <label className="font-label-lg text-label-lg text-on-surface font-semibold">
-                Periode Hijriyah
+              <label className="text-xs font-bold uppercase tracking-wider text-ink-800">
+                Jenis Acara / Kegiatan
               </label>
               <div className="relative w-full">
-                <select
-                  className="w-full h-12 px-3 pr-8 rounded-xl bg-surface-container-low font-body-md text-body-md text-on-surface appearance-none focus:outline-none focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary/25 transition-all text-xs font-medium truncate"
-                  value={periodeLabel}
-                  onChange={e => setPeriodeLabel(e.target.value)}
-                >
-                  {periode.map(p => (
-                    <option key={p.id} value={p.labelPeriode}>
-                      {p.labelPeriode} {p.statusAktif ? '(Aktif)' : ''}
-                    </option>
-                  ))}
-                </select>
-                <span className="material-symbols-outlined text-[18px] text-on-surface-variant absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none">
-                  calendar_month
+                <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-400 flex items-center pointer-events-none">
+                  <span className="material-symbols-outlined text-[19px]">event_note</span>
+                </div>
+                <input
+                  className="w-full h-11 pl-11 pr-3 rounded-xl bg-surface-subtle font-medium text-xs sm:text-sm text-ink-900 border border-border placeholder:text-ink-400 focus:outline-none focus:bg-white focus:border-forest-600 focus:ring-2 focus:ring-forest-600/15 transition-all"
+                  placeholder="Contoh: Pengajian Umum, Kegiatan LBM, Takziran"
+                  type="text"
+                  value={jenisAcara}
+                  onChange={e => setJenisAcara(e.target.value)}
+                  required
+                />
+              </div>
+            </div>
+
+            {/* 2. Rincian Belanja (Tepat di Bawah Jenis Acara) */}
+            <div className="flex flex-col gap-2.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold uppercase tracking-wider text-ink-800">
+                  Rincian Belanja
+                </label>
+                <span className="text-[11px] text-ink-500 font-medium">
+                  {items.length} Rincian
                 </span>
               </div>
-            </div>
 
-            <div className="flex flex-col gap-1.5">
-              <label className="font-label-lg text-label-lg text-on-surface font-semibold">
-                Tanggal
-              </label>
-              <input
-                type="date"
-                className="w-full h-12 px-3 rounded-xl bg-surface-container-low font-body-md text-body-md text-on-surface focus:outline-none focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary/25 transition-all font-medium text-xs"
-                value={tanggalTransaksi}
-                onChange={e => setTanggalTransaksi(e.target.value)}
-                required
-              />
-            </div>
-          </div>
+              {items.map((item, idx) => (
+                <div
+                  key={item.rowId}
+                  className="p-3.5 rounded-xl bg-surface-subtle/80 border border-border flex flex-col gap-2.5 relative"
+                >
+                  <div className="flex items-center justify-between pb-1.5 border-b border-border/70">
+                    <span className="text-xs font-bold text-forest-800">
+                      Rincian {items.length > 1 ? `#${idx + 1}` : '1'}
+                    </span>
+                    {items.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeItemRow(idx)}
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50 px-2 py-0.5 rounded text-xs font-semibold flex items-center gap-1 active:scale-95 transition-colors"
+                        title="Hapus rincian ini"
+                      >
+                        <span className="material-symbols-outlined text-[15px]">delete</span>
+                        <span>Hapus Rincian</span>
+                      </button>
+                    )}
+                  </div>
 
-          {/* 3. Jenis Acara */}
-          <div className="flex flex-col gap-1.5">
-            <label className="font-label-lg text-label-lg text-on-surface font-semibold">
-              2. Jenis Acara / Kegiatan
-            </label>
-            <div className="relative w-full">
-              <div className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant flex items-center pointer-events-none">
-                <span className="material-symbols-outlined text-[19px]">event_note</span>
-              </div>
-              <input
-                className="w-full h-12 pl-10 pr-3 rounded-xl bg-surface-container-low font-body-md text-body-md text-on-surface placeholder:text-outline-variant focus:outline-none focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary/25 transition-all font-medium"
-                placeholder="Contoh: Kegiatan LBM, Takziran, Pengajian"
-                type="text"
-                value={jenisAcara}
-                onChange={e => setJenisAcara(e.target.value)}
-                required
-              />
-            </div>
-          </div>
+                  {/* Nama Barang */}
+                  <div className="relative w-full">
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-400 flex items-center pointer-events-none">
+                      <span className="material-symbols-outlined text-[18px]">shopping_bag</span>
+                    </div>
+                    <input
+                      className="w-full h-10 pl-9 pr-3 rounded-lg bg-white font-medium text-xs sm:text-sm text-ink-900 border border-border placeholder:text-ink-400 focus:outline-none focus:border-forest-600 focus:ring-1 focus:ring-forest-600 transition-all"
+                      placeholder="Contoh: Rokok Surya 16, Konsumsi Snack, Kertas"
+                      type="text"
+                      value={item.namaBarang}
+                      onChange={e => handleItemChange(idx, 'namaBarang', e.target.value)}
+                      required
+                    />
+                  </div>
 
-          {/* 4. Rincian Barang (Daftar Barang Belanja) */}
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center justify-between">
-              <label className="font-label-lg text-label-lg text-on-surface font-semibold">
-                3. Rincian Belanja Barang
-              </label>
+                  {/* Jumlah & Satuan & Harga Satuan Grid */}
+                  <div className="grid grid-cols-12 gap-2">
+                    {/* Stepper Jumlah */}
+                    <div className="col-span-5 flex flex-col gap-1">
+                      <span className="text-[11px] text-ink-500 font-medium">Jumlah</span>
+                      <div className="h-10 bg-white rounded-lg px-1 flex items-center justify-between border border-border">
+                        <button
+                          aria-label="Kurangi"
+                          className="w-7 h-7 rounded bg-surface-subtle hover:bg-neutral-200 text-ink-800 flex items-center justify-center active:scale-90 transition-transform"
+                          onClick={() => adjustQty(idx, -1)}
+                          type="button"
+                        >
+                          <span className="material-symbols-outlined text-[16px]">remove</span>
+                        </button>
+                        <input
+                          className="w-10 text-center bg-transparent tabular-nums text-xs sm:text-sm text-ink-900 font-bold focus:outline-none"
+                          min="1"
+                          type="number"
+                          value={item.jumlah}
+                          onChange={e => handleItemChange(idx, 'jumlah', e.target.value)}
+                        />
+                        <button
+                          aria-label="Tambah"
+                          className="w-7 h-7 rounded bg-forest-600 hover:bg-forest-700 text-white flex items-center justify-center active:scale-90 transition-transform shadow-xs"
+                          onClick={() => adjustQty(idx, 1)}
+                          type="button"
+                        >
+                          <span className="material-symbols-outlined text-[16px]">add</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Satuan */}
+                    <div className="col-span-3 flex flex-col gap-1">
+                      <span className="text-[11px] text-ink-500 font-medium">Satuan</span>
+                      <select
+                        className="w-full h-10 px-2 rounded-lg bg-white text-ink-900 text-xs appearance-none focus:outline-none border border-border focus:border-forest-600 font-medium"
+                        value={item.satuan}
+                        onChange={e => handleItemChange(idx, 'satuan', e.target.value)}
+                      >
+                        <option value="bungkus">bungkus</option>
+                        <option value="pcs">pcs</option>
+                        <option value="pack">pack</option>
+                        <option value="dus">dus</option>
+                        <option value="kg">kg</option>
+                        <option value="porsi">porsi</option>
+                        <option value="lembar">lembar</option>
+                      </select>
+                    </div>
+
+                    {/* Harga Satuan */}
+                    <div className="col-span-4 flex flex-col gap-1">
+                      <span className="text-[11px] text-ink-500 font-medium">
+                        Harga Satuan (Rp)
+                      </span>
+                      <input
+                        className="w-full h-10 px-2 rounded-lg bg-white text-ink-900 tabular-nums text-xs font-bold focus:outline-none border border-border focus:border-forest-600 text-right"
+                        placeholder="0"
+                        type="text"
+                        value={item.hargaSatuan === 0 ? '' : formatNumber(item.hargaSatuan)}
+                        onChange={e => handleItemChange(idx, 'hargaSatuan', e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Subtotal baris */}
+                  <div className="flex items-center justify-between text-xs pt-1.5 border-t border-border/60 text-ink-500">
+                    <span>
+                      Subtotal: <span className="tabular-nums font-semibold text-ink-700">{item.jumlah}</span> {item.satuan} × {formatRupiah(item.hargaSatuan)}
+                    </span>
+                    <span className="font-bold tabular-nums text-forest-700">{formatRupiah(item.total)}</span>
+                  </div>
+                </div>
+              ))}
+
               {!expenseToEdit && (
                 <button
                   type="button"
                   onClick={addItemRow}
-                  className="inline-flex items-center gap-1 text-primary hover:text-primary-container font-label-sm text-label-sm font-semibold active:scale-95 transition-transform"
+                  className="w-full h-11 rounded-xl border border-dashed border-forest-600/40 hover:border-forest-600 bg-forest-50/50 hover:bg-forest-50 text-forest-800 text-xs sm:text-sm font-semibold flex items-center justify-center gap-1.5 active:scale-98 transition-all mt-1"
                 >
-                  <span className="material-symbols-outlined text-[16px]">add_circle</span>
-                  <span>+ Tambah Rincian</span>
+                  <span className="material-symbols-outlined text-[18px]">add_circle</span>
+                  <span>+ Tambah Rincian Belanja</span>
                 </button>
               )}
             </div>
 
-            {items.map((item, idx) => (
-              <div
-                key={item.rowId}
-                className="p-3 rounded-xl bg-surface-container-low/60 border border-surface-container flex flex-col gap-2.5 relative"
-              >
-                {items.length > 1 && (
-                  <div className="flex items-center justify-between pb-1 border-b border-surface-container">
-                    <span className="font-label-sm text-label-sm font-semibold text-primary">
-                      Barang #{idx + 1}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => removeItemRow(idx)}
-                      className="text-error hover:text-error-container p-0.5"
-                      title="Hapus baris ini"
-                    >
-                      <span className="material-symbols-outlined text-[16px]">delete</span>
-                    </button>
-                  </div>
-                )}
-
-                {/* Nama Barang */}
-                <div className="relative w-full">
-                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant flex items-center pointer-events-none">
-                    <span className="material-symbols-outlined text-[18px]">shopping_bag</span>
-                  </div>
-                  <input
-                    className="w-full h-11 pl-10 pr-3 rounded-lg bg-surface-container-lowest font-body-md text-body-md text-on-surface placeholder:text-outline-variant focus:outline-none focus:ring-2 focus:ring-primary/25 transition-all"
-                    placeholder="Contoh: Rokok Surya 16, Konsumsi Snack, Kertas"
-                    type="text"
-                    value={item.namaBarang}
-                    onChange={e => handleItemChange(idx, 'namaBarang', e.target.value)}
-                    required
-                  />
-                </div>
-
-                {/* Jumlah & Satuan & Harga Satuan Grid */}
-                <div className="grid grid-cols-12 gap-2">
-                  {/* Stepper Jumlah */}
-                  <div className="col-span-5 flex flex-col gap-1">
-                    <span className="text-[11px] text-on-surface-variant font-medium">Jumlah</span>
-                    <div className="h-10 bg-surface-container-lowest rounded-lg px-1 flex items-center justify-between border border-surface-container">
-                      <button
-                        aria-label="Kurangi"
-                        className="w-7 h-7 rounded bg-surface-container-high hover:bg-surface-container-highest text-on-surface flex items-center justify-center active:scale-90 transition-transform"
-                        onClick={() => adjustQty(idx, -1)}
-                        type="button"
-                      >
-                        <span className="material-symbols-outlined text-[16px]">remove</span>
-                      </button>
-                      <input
-                        className="w-10 text-center bg-transparent font-title-currency-md text-sm text-on-surface font-bold focus:outline-none"
-                        min="1"
-                        type="number"
-                        value={item.jumlah}
-                        onChange={e => handleItemChange(idx, 'jumlah', e.target.value)}
-                      />
-                      <button
-                        aria-label="Tambah"
-                        className="w-7 h-7 rounded bg-primary text-on-primary flex items-center justify-center active:scale-90 transition-transform shadow-sm"
-                        onClick={() => adjustQty(idx, 1)}
-                        type="button"
-                      >
-                        <span className="material-symbols-outlined text-[16px]">add</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Satuan */}
-                  <div className="col-span-3 flex flex-col gap-1">
-                    <span className="text-[11px] text-on-surface-variant font-medium">Satuan</span>
-                    <select
-                      className="w-full h-10 px-2 rounded-lg bg-surface-container-lowest text-on-surface font-body-md text-xs appearance-none focus:outline-none border border-surface-container"
-                      value={item.satuan}
-                      onChange={e => handleItemChange(idx, 'satuan', e.target.value)}
-                    >
-                      <option value="bungkus">bungkus</option>
-                      <option value="pcs">pcs</option>
-                      <option value="pack">pack</option>
-                      <option value="dus">dus</option>
-                      <option value="kg">kg</option>
-                      <option value="porsi">porsi</option>
-                      <option value="lembar">lembar</option>
-                    </select>
-                  </div>
-
-                  {/* Harga Satuan */}
-                  <div className="col-span-4 flex flex-col gap-1">
-                    <span className="text-[11px] text-on-surface-variant font-medium">
-                      Harga (Rp)
-                    </span>
-                    <input
-                      className="w-full h-10 px-2 rounded-lg bg-surface-container-lowest text-on-surface font-title-currency-md text-xs font-bold focus:outline-none border border-surface-container text-right"
-                      placeholder="0"
-                      type="text"
-                      value={item.hargaSatuan === 0 ? '' : formatNumber(item.hargaSatuan)}
-                      onChange={e => handleItemChange(idx, 'hargaSatuan', e.target.value)}
-                    />
-                  </div>
-                </div>
-
-                {/* Subtotal baris */}
-                <div className="flex items-center justify-between text-xs pt-1 border-t border-surface-container/60 text-on-surface-variant">
-                  <span>
-                    Subtotal: {item.jumlah} {item.satuan} × {formatRupiah(item.hargaSatuan)}
-                  </span>
-                  <span className="font-bold text-primary">{formatRupiah(item.total)}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* 5. Total Pengeluaran Acara (Read-only Calculated) */}
-          <div className="bg-primary/5 rounded-xl p-space-md flex flex-col gap-1 border border-primary/10">
-            <div className="flex items-center justify-between">
-              <span className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider font-semibold">
-                Total Seluruh Pengeluaran
-              </span>
-              <span className="font-label-sm text-label-sm bg-primary/10 text-primary px-2 py-0.5 rounded-full font-semibold">
-                Dihitung Otomatis
-              </span>
-            </div>
-            <div className="flex items-baseline justify-between mt-1">
-              <span className="font-headline-xl text-headline-xl text-primary font-bold tracking-tight">
-                {formatRupiah(grandTotal)}
-              </span>
-              <span
-                className="material-symbols-outlined text-[22px] text-primary"
-                style={{ fontVariationSettings: "'FILL' 1" }}
-              >
-                calculate
-              </span>
-            </div>
-          </div>
-
-          {/* 6. Live Simulation Box (Simulasi Saldo Sebelum Simpan) */}
-          <div className="bg-surface-container-lowest rounded-xl p-3 border border-surface-container shadow-sm flex flex-col gap-2">
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-on-surface-variant font-semibold flex items-center gap-1">
-                <span className="material-symbols-outlined text-[16px] text-secondary">
-                  account_balance_wallet
-                </span>
-                Simulasi Saldo Kas {kategoriNama}
-              </span>
-              <span className="text-[10px] bg-secondary-fixed/50 text-on-secondary-fixed px-2 py-0.5 rounded-full font-bold">
-                Estimasi Sementara
-              </span>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2 text-xs pt-1">
-              <div className="flex flex-col">
-                <span className="text-on-surface-variant">Saldo Saat Ini</span>
-                <span className="font-bold text-on-surface">
-                  {formatRupiah(currentCategoryBalance)}
-                </span>
-              </div>
-              <div className="flex flex-col text-right">
-                <span className="text-on-surface-variant">Sisa Setelah Transaksi</span>
-                <span
-                  className={`font-bold ${
-                    simulatedRemainingBalance < 0 ? 'text-error' : 'text-tertiary'
-                  }`}
+            {/* 3. Kategori Pos Anggaran */}
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold uppercase tracking-wider text-ink-600">
+                  Kategori Pos Anggaran
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setIsAddingCategory(prev => !prev)}
+                  className="text-forest-700 hover:text-forest-800 text-xs font-semibold flex items-center gap-1 active:scale-95 transition-colors"
                 >
-                  {formatRupiah(simulatedRemainingBalance)}
+                  <span className="material-symbols-outlined text-[15px]">
+                    {isAddingCategory ? 'close' : 'add'}
+                  </span>
+                  <span>{isAddingCategory ? 'Batal' : '+ Kategori Baru'}</span>
+                </button>
+              </div>
+
+              {isAddingCategory && (
+                <div className="flex items-center gap-2 p-2.5 bg-forest-50/50 rounded-xl border border-forest-200 animate-in fade-in duration-200">
+                  <input
+                    type="text"
+                    placeholder="Nama pos/kategori baru..."
+                    value={newCategoryName}
+                    onChange={e => setNewCategoryName(e.target.value)}
+                    className="flex-1 h-9 px-3 rounded-lg bg-white text-ink-900 text-xs border border-border focus:outline-none focus:ring-1 focus:ring-forest-600 font-medium"
+                  />
+                  <button
+                    type="button"
+                    disabled={creatingCategory || !newCategoryName.trim()}
+                    onClick={handleQuickCreateCategory}
+                    className="h-9 px-3.5 rounded-lg bg-forest-600 text-white text-xs font-semibold flex items-center gap-1.5 active:scale-95 disabled:opacity-50 hover:bg-forest-700 transition-colors"
+                  >
+                    <span className="material-symbols-outlined text-[14px]">save</span>
+                    <span>{creatingCategory ? 'Menyimpan...' : 'Simpan'}</span>
+                  </button>
+                </div>
+              )}
+
+              <div className="relative w-full">
+                <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-forest-700 flex items-center pointer-events-none">
+                  <span
+                    className="material-symbols-outlined text-[20px]"
+                    style={{ fontVariationSettings: "'FILL' 1" }}
+                  >
+                    account_balance
+                  </span>
+                </div>
+                <select
+                  className="w-full h-11 pl-11 pr-9 rounded-xl bg-surface-subtle font-medium text-xs sm:text-sm text-ink-900 border border-border appearance-none focus:outline-none focus:bg-white focus:border-forest-600 focus:ring-2 focus:ring-forest-600/15 transition-all"
+                  value={kategoriNama}
+                  onChange={e => {
+                    if (e.target.value === '__NEW__') {
+                      setIsAddingCategory(true);
+                    } else {
+                      setKategoriNama(e.target.value);
+                    }
+                  }}
+                >
+                  {kategori
+                    .filter(k => k.statusAktif)
+                    .map(k => (
+                      <option key={k.id} value={k.namaKategori}>
+                        {k.namaKategori}
+                      </option>
+                    ))}
+                  <option value="__NEW__">+ Tambah Kategori Baru...</option>
+                </select>
+                <span className="material-symbols-outlined text-[20px] text-ink-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                  arrow_drop_down
                 </span>
               </div>
             </div>
-          </div>
 
-          {/* Catatan Tambahan (Opsional) */}
-          <div className="flex flex-col gap-1">
-            <label className="font-label-sm text-label-sm text-on-surface-variant font-semibold">
-              Catatan Tambahan (Opsional)
-            </label>
-            <input
-              type="text"
-              className="w-full h-10 px-3 rounded-xl bg-surface-container-low font-body-md text-body-md text-on-surface focus:outline-none focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary/25 transition-all"
-              placeholder="Contoh: Titipan santri, kuitansi terlampir"
-              value={catatan}
-              onChange={e => setCatatan(e.target.value)}
-            />
-          </div>
+            {/* 4. Periode Hijriyah & Tanggal side-by-side */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold uppercase tracking-wider text-ink-600">
+                  Periode Hijriyah
+                </label>
+                <div className="relative w-full">
+                  <select
+                    className="w-full h-11 px-3 pr-8 rounded-xl bg-surface-subtle font-medium text-xs text-ink-900 border border-border appearance-none focus:outline-none focus:bg-white focus:border-forest-600 focus:ring-2 focus:ring-forest-600/15 transition-all truncate"
+                    value={periodeLabel}
+                    onChange={e => setPeriodeLabel(e.target.value)}
+                  >
+                    {periode.map(p => (
+                      <option key={p.id} value={p.labelPeriode}>
+                        {p.labelPeriode} {p.statusAktif ? '(Aktif)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="material-symbols-outlined text-[18px] text-ink-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none">
+                    calendar_month
+                  </span>
+                </div>
+              </div>
 
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold uppercase tracking-wider text-ink-600">
+                  Tanggal Transaksi
+                </label>
+                <input
+                  type="date"
+                  className="w-full h-11 px-3 rounded-xl bg-surface-subtle font-medium text-xs text-ink-900 border border-border focus:outline-none focus:bg-white focus:border-forest-600 focus:ring-2 focus:ring-forest-600/15 transition-all"
+                  value={tanggalTransaksi}
+                  onChange={e => setTanggalTransaksi(e.target.value)}
+                  required
+                />
+              </div>
+            </div>
+
+            {/* 5. Total Pengeluaran Acara (Read-only Calculated) */}
+            <div className="bg-forest-50/70 rounded-xl p-4 flex flex-col gap-1 border border-forest-100">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold uppercase tracking-wider text-forest-800">
+                  Total Seluruh Pengeluaran
+                </span>
+                <span className="text-[11px] bg-forest-100 text-forest-800 px-2.5 py-0.5 rounded-full font-semibold">
+                  Otomatis
+                </span>
+              </div>
+              <div className="flex items-baseline justify-between mt-1">
+                <span className="text-xl sm:text-2xl text-forest-800 font-bold tracking-tight tabular-nums">
+                  {formatRupiah(grandTotal)}
+                </span>
+                <span
+                  className="material-symbols-outlined text-[22px] text-forest-700"
+                  style={{ fontVariationSettings: "'FILL' 1" }}
+                >
+                  calculate
+                </span>
+              </div>
+            </div>
+
+            {/* 6. Live Simulation Box (Simulasi Saldo Sebelum Simpan) */}
+            <div className="bg-white rounded-xl p-3.5 border border-border shadow-xs flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-ink-600 font-semibold flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-[16px] text-forest-700">
+                    account_balance_wallet
+                  </span>
+                  Simulasi Saldo Kas {kategoriNama}
+                </span>
+                <span className="text-[10px] bg-amber-50 text-amber-800 border border-amber-200 px-2 py-0.5 rounded-md font-semibold">
+                  Estimasi Sisa
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 text-xs pt-1">
+                <div className="flex flex-col">
+                  <span className="text-ink-500">Saldo Saat Ini</span>
+                  <span className="font-bold tabular-nums text-ink-900">
+                    {formatRupiah(currentCategoryBalance)}
+                  </span>
+                </div>
+                <div className="flex flex-col text-right">
+                  <span className="text-ink-500">Sisa Setelah Transaksi</span>
+                  <span
+                    className={`font-bold tabular-nums ${
+                      simulatedRemainingBalance < 0 ? 'text-red-600' : 'text-emerald-700'
+                    }`}
+                  >
+                    {formatRupiah(simulatedRemainingBalance)}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Catatan Tambahan (Opsional) */}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-semibold uppercase tracking-wider text-ink-600">
+                Catatan Tambahan (Opsional)
+              </label>
+              <input
+                type="text"
+                className="w-full h-10 px-3 rounded-xl bg-surface-subtle font-medium text-xs sm:text-sm text-ink-900 border border-border focus:outline-none focus:bg-white focus:border-forest-600 focus:ring-2 focus:ring-forest-600/15 transition-all"
+                placeholder="Contoh: Titipan santri, kuitansi terlampir"
+                value={catatan}
+                onChange={e => setCatatan(e.target.value)}
+              />
+            </div>
           </div>
 
           {/* Action Buttons Sticky Footer */}
-          <div className="p-space-md border-t border-surface-container flex-shrink-0 bg-surface-container-lowest pb-[max(1rem,env(safe-area-inset-bottom))]">
-            <div className="grid grid-cols-2 gap-space-sm">
+          <div className="p-4 border-t border-border flex-shrink-0 bg-white pb-[max(1rem,env(safe-area-inset-bottom))]">
+            <div className="grid grid-cols-2 gap-3">
               <button
                 type="button"
                 onClick={closeExpenseModal}
                 disabled={saving}
-                className="h-12 rounded-xl bg-surface-container text-on-surface font-label-lg text-label-lg active:scale-95 transition-all font-semibold"
+                className="h-11 rounded-xl bg-surface-subtle hover:bg-neutral-200 text-ink-800 border border-border font-medium text-sm active:scale-95 transition-all"
               >
                 Batal
               </button>
               <button
                 type="submit"
                 disabled={saving}
-                className="h-12 rounded-xl bg-primary text-on-primary font-label-lg text-label-lg shadow-md active:scale-95 transition-all flex items-center justify-center gap-2 font-semibold disabled:opacity-60"
+                className="h-11 rounded-xl bg-forest-600 hover:bg-forest-700 text-white font-semibold text-sm shadow-sm active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-60"
               >
                 {saving ? (
                   <>
@@ -748,7 +753,7 @@ export default function ExpenseModal() {
                 ) : (
                   <>
                     <span className="material-symbols-outlined text-[18px]">save</span>
-                    <span>{expenseToEdit ? 'Simpan Perubahan' : 'Simpan Pengeluaran'}</span>
+                    <span>{expenseToEdit ? 'Simpan Perubahan' : 'Simpan Transaksi'}</span>
                   </>
                 )}
               </button>

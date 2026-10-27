@@ -67,21 +67,21 @@ export default function AdminPinModal({
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs transition-opacity duration-200"
+      className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-ink-900/60 backdrop-blur-sm transition-opacity duration-200"
       onClick={(e) => {
         if (e.target === e.currentTarget && !loading) onClose();
       }}
     >
-      <div className="bg-surface rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl border border-surface-container animate-in fade-in zoom-in-95 duration-150">
+      <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl border border-border animate-in fade-in zoom-in-95 duration-150">
         <div className="p-6">
-          <div className="w-12 h-12 rounded-full bg-primary/10 text-primary flex items-center justify-center mx-auto mb-4">
-            <span className="material-symbols-outlined text-[28px]">lock</span>
+          <div className="w-12 h-12 rounded-xl bg-forest-50 border border-forest-100 text-forest-700 flex items-center justify-center mx-auto mb-4">
+            <span className="material-symbols-outlined text-[26px]">lock</span>
           </div>
 
-          <h3 className="font-headline-sm text-headline-sm text-center text-on-surface font-bold mb-1">
+          <h3 className="text-lg text-center text-ink-900 font-bold tracking-tight mb-1">
             Autentikasi Bendahara
           </h3>
-          <p className="font-body-sm text-body-sm text-center text-on-surface-variant mb-5">
+          <p className="text-xs text-center text-ink-500 mb-5 leading-relaxed">
             Operasi ini mengubah buku kas. Masukkan PIN keamanan Bendahara untuk melanjutkan.
           </p>
 
@@ -100,14 +100,14 @@ export default function AdminPinModal({
                     if (error) setError('');
                   }}
                   placeholder="Masukkan 6-digit PIN"
-                  className="w-full text-center text-2xl tracking-widest font-mono py-3 px-4 rounded-xl border border-outline/30 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all bg-surface-container-low text-on-surface"
+                  className="w-full text-center text-2xl tracking-widest font-mono py-3 px-4 rounded-xl border border-border focus:border-forest-600 focus:ring-2 focus:ring-forest-600/20 outline-none transition-all bg-surface-subtle text-ink-900"
                   disabled={loading}
                   autoComplete="off"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPin(!showPin)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant/70 hover:text-on-surface p-1"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-400 hover:text-ink-700 p-1"
                   tabIndex={-1}
                 >
                   <span className="material-symbols-outlined text-[20px]">
@@ -117,7 +117,7 @@ export default function AdminPinModal({
               </div>
 
               {error && (
-                <div className="mt-2.5 flex items-center gap-1.5 text-error text-xs font-medium bg-error/10 p-2.5 rounded-lg border border-error/20">
+                <div className="mt-2.5 flex items-center gap-2 text-red-700 text-xs font-medium bg-red-50 p-2.5 rounded-lg border border-red-200">
                   <span className="material-symbols-outlined text-[16px] flex-shrink-0">error</span>
                   <span>{error}</span>
                 </div>
@@ -129,14 +129,14 @@ export default function AdminPinModal({
                 type="button"
                 onClick={onClose}
                 disabled={loading}
-                className="flex-1 py-2.5 px-4 rounded-xl border border-outline/30 text-on-surface font-label-md text-label-md hover:bg-surface-container active:scale-98 transition-all disabled:opacity-50"
+                className="flex-1 py-2.5 px-4 rounded-xl bg-surface-subtle hover:bg-neutral-200 border border-border text-ink-800 text-xs sm:text-sm font-medium active:scale-95 transition-all disabled:opacity-50"
               >
                 Batal
               </button>
               <button
                 type="submit"
                 disabled={loading || !pin.trim()}
-                className="flex-1 py-2.5 px-4 rounded-xl bg-primary text-on-primary font-label-md text-label-md font-semibold hover:bg-primary/95 active:scale-98 transition-all disabled:opacity-50 flex items-center justify-center gap-1.5 shadow-sm"
+                className="flex-1 py-2.5 px-4 rounded-xl bg-forest-600 hover:bg-forest-700 text-white text-xs sm:text-sm font-semibold active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center gap-1.5 shadow-sm"
               >
                 {loading ? (
                   <>
@@ -153,8 +153,8 @@ export default function AdminPinModal({
             </div>
           </form>
 
-          <p className="text-[11px] text-center text-on-surface-variant/70 mt-4">
-            PIN default awal: <code className="bg-surface-container px-1 py-0.5 rounded font-mono">144805</code> (dapat diubah di konfigurasi server).
+          <p className="text-[11px] text-center text-ink-400 mt-4">
+            PIN default awal: <code className="bg-surface-subtle px-1.5 py-0.5 rounded border border-border text-ink-700 font-mono">144805</code>
           </p>
         </div>
       </div>

@@ -39,7 +39,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <>
       <Header />
-      <main className="flex-1 flex flex-col relative w-full max-w-[480px] mx-auto px-margin pt-16 pb-32 bg-surface">
+      <main className="flex-1 flex flex-col relative w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-16 sm:pt-20 pb-28 md:pb-12 bg-surface">
         {children}
       </main>
       <BottomNav />

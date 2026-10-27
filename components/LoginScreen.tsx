@@ -42,33 +42,29 @@ export default function LoginScreen() {
       {/* Container Login */}
       <div className="w-full max-w-sm flex flex-col items-center">
         {/* Card Utama */}
-        <div className="w-full bg-white rounded-3xl p-7 shadow-xl shadow-primary/5 border border-surface-container relative overflow-hidden">
-          {/* Subtle Decorative Pattern Accent */}
-          <div className="absolute -top-12 -right-12 w-32 h-32 bg-primary/5 rounded-full pointer-events-none" />
-          <div className="absolute -bottom-8 -left-8 w-24 h-24 bg-secondary-fixed/30 rounded-full pointer-events-none" />
-
+        <div className="w-full bg-white rounded-2xl p-7 sm:p-8 shadow-sm border border-surface-variant relative overflow-hidden">
           {/* Header Identitas */}
-          <div className="flex flex-col items-center text-center mb-6 relative z-10">
-            <div className="w-20 h-20 rounded-2xl bg-white p-2 flex items-center justify-center shadow-md ring-2 ring-primary/20 mb-3.5">
+          <div className="flex flex-col items-center text-center mb-6">
+            <div className="w-18 h-18 rounded-2xl bg-white p-2 flex items-center justify-center shadow-xs border border-surface-variant ring-1 ring-primary/10 mb-3">
               <img
                 src="/logo.png"
                 alt="Logo Bendahara MMD - MIDA Sumbersari"
-                className="w-full h-full object-contain"
+                className="w-14 h-14 object-contain"
               />
             </div>
-            <h1 className="font-headline-lg text-headline-lg font-bold text-primary tracking-tight">
+            <h1 className="font-headline-lg text-xl sm:text-2xl font-bold text-primary tracking-tight">
               Bendahara MMD
             </h1>
-            <p className="font-label-md text-label-md text-on-surface-variant font-medium mt-0.5">
+            <p className="text-xs sm:text-sm text-on-surface-variant font-medium mt-0.5">
               Majelis Musyawarah & Dirosah
             </p>
-            <span className="inline-block px-2.5 py-0.5 mt-2 bg-primary/10 text-primary font-label-sm text-[11px] font-semibold rounded-full">
+            <span className="inline-block px-2.5 py-0.5 mt-2 bg-primary/8 text-primary font-label-sm text-[11px] font-semibold rounded-full border border-primary/15">
               MIDA Sumbersari Kediri
             </span>
           </div>
 
           {/* Form Login */}
-          <form onSubmit={handleSubmit} className="space-y-4 relative z-10">
+          <form onSubmit={handleSubmit} className="space-y-4">
             {/* Field Username */}
             <div>
               <label className="block font-label-md text-label-md text-on-surface font-semibold mb-1.5">

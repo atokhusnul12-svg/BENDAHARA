@@ -17,7 +17,6 @@ export default function PengaturanPage() {
     setSelectedPeriode,
     deleteRecord,
     isAdmin,
-    logoutAdmin,
   } = useApp();
 
   const [testingSync, setTestingSync] = useState(false);
@@ -96,7 +95,6 @@ export default function PengaturanPage() {
       } else {
         showToast('Pemeriksaan Selesai', json.data?.error || 'Aplikasi dalam mode penyimpanan lokal.', 'info');
       }
-      // Perbarui data di background tanpa memblokir tombol
       refreshData().catch(() => {});
     } catch (e: any) {
       showToast('Gagal memeriksa koneksi', e.message || 'Waktu koneksi habis.', 'error');
@@ -122,31 +120,34 @@ export default function PengaturanPage() {
 
   const handleSaveCategory = async () => {
     if (!categoryNameInput.trim()) {
-      showToast('Validasi Gagal', 'Nama kategori wajib diisi.', 'error');
+      showToast('Nama Kategori Kosong', 'Silakan isi nama kategori kas.', 'error');
       return;
     }
 
     setSavingCategory(true);
     try {
-      const endpoint = '/api/kategori';
-      const method = categoryToEdit ? 'PUT' : 'POST';
-      const body = categoryToEdit
-        ? { id: categoryToEdit.id, namaKategori: categoryNameInput.trim(), statusAktif: categoryStatusInput }
-        : { namaKategori: categoryNameInput.trim() };
+      const payload: any = {
+        namaKategori: categoryNameInput.trim(),
+        statusAktif: categoryStatusInput,
+      };
+      if (categoryToEdit) payload.id = categoryToEdit.id;
 
-      const res = await fetch(endpoint, {
-        method,
+      const res = await fetch('/api/kategori', {
+        method: categoryToEdit ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: JSON.stringify(payload),
       });
-      const json = await res.json();
 
+      const json = await res.json();
       if (res.status === 401) {
         throw new Error('Sesi Anda telah berakhir. Silakan login kembali.');
       }
       if (!json.success) throw new Error(json.error);
 
-      showToast(categoryToEdit ? 'Kategori Diperbarui' : 'Kategori Ditambahkan', json.message);
+      showToast(
+        categoryToEdit ? 'Kategori Diperbarui' : 'Kategori Baru Dibuat',
+        json.message
+      );
       await refreshData();
       setCategoryModalOpen(false);
     } catch (err: any) {
@@ -295,465 +296,297 @@ export default function PengaturanPage() {
     }
   };
 
-  // 4. Backup Handler
-  const handleDownloadBackup = () => {
-    window.open('/api/backup', '_blank');
-  };
-
   return (
-    <div className="flex flex-col w-full pb-10">
-      {/* Header Ringkas */}
-      <div className="flex flex-col pt-space-md pb-space-lg">
-        <div className="flex items-center gap-space-xs">
-          <span className="material-symbols-outlined text-primary text-[24px]">tune</span>
-          <h2 className="font-headline-lg text-headline-lg text-on-surface font-bold tracking-tight">
-            Pengaturan & Integrasi
-          </h2>
+    <div className="flex flex-col w-full space-y-6 pb-12">
+      {/* 1. Header Pengaturan Ringkas */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 sm:p-5 rounded-2xl shadow-xs border border-surface-variant">
+        <div className="flex flex-col min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined text-primary text-[22px]">tune</span>
+            <h2 className="font-headline-md text-lg sm:text-xl font-bold text-on-surface tracking-tight">
+              Pengaturan & Konfigurasi Kas
+            </h2>
+          </div>
+          <p className="text-xs text-on-surface-variant font-medium mt-1">
+            Konfigurasi koneksi Google Sheets, siklus kalender Hijriyah, divisi kas, dan pemeliharaan data.
+          </p>
         </div>
-        <p className="font-body-md text-body-md text-on-surface-variant mt-1">
-          Konfigurasi koneksi Google Sheets, periode kalender Hijriyah, dan kategori divisi kas pesantren.
-        </p>
+
+        <div className="flex items-center gap-2">
+          <span className="text-xs px-3 py-1 bg-primary/8 text-primary font-bold rounded-xl border border-primary/15">
+            Admin Bendahara
+          </span>
+        </div>
       </div>
 
-      {/* 0. Keamanan & Akses Bendahara */}
-      <section className="flex flex-col gap-space-sm mb-space-xl">
-        <div className="flex items-center justify-between px-space-xs">
-          <div className="flex items-center gap-space-xs">
-            <span className="material-symbols-outlined text-primary text-[18px]">verified_user</span>
-            <h3 className="font-label-lg text-label-lg text-on-surface font-semibold">
-              Keamanan & Akses Bendahara
-            </h3>
-          </div>
-          <span className={`font-label-sm text-label-sm px-2.5 py-0.5 rounded-full font-semibold flex items-center gap-1 ${
-            isAdmin ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'
-          }`}>
-            <span className={`w-2 h-2 rounded-full ${isAdmin ? 'bg-emerald-500' : 'bg-slate-400'}`} />
-            {isAdmin ? 'Admin Terverifikasi' : 'Tamu / Terkunci'}
-          </span>
-        </div>
-
-        <div className="bg-surface-container-lowest rounded-2xl p-space-lg shadow-sm border border-surface-container flex items-center justify-between gap-4">
-          <div className="flex flex-col min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="font-headline-sm text-sm font-bold text-on-surface">
-                Akun Bendahara MMD
-              </span>
-              <span className="px-2 py-0.5 rounded-md bg-primary/10 text-primary font-mono text-[11px] font-bold">
-                MMD
-              </span>
-            </div>
-            <span className="font-body-sm text-xs text-on-surface-variant mt-1 leading-relaxed">
-              Sesi masuk aktif. Memiliki akses penuh untuk mencatat pengeluaran, subsidi, dan mengubah data kas tanpa kode akses.
-            </span>
-          </div>
-
-          <button
-            type="button"
-            onClick={logoutAdmin}
-            className="py-2.5 px-4 rounded-xl border border-error/30 text-error hover:bg-error/10 font-label-md text-xs font-bold active:scale-95 transition-all flex items-center gap-1.5 flex-shrink-0 shadow-xs"
-            title="Keluar dari sesi Bendahara"
-          >
-            <span className="material-symbols-outlined text-[18px]">logout</span>
-            <span>Keluar</span>
-          </button>
-        </div>
-      </section>
-
-      {/* 1. Google Sheets Connection Section */}
-      <section className="flex flex-col gap-space-sm mb-space-xl">
-        <div className="flex items-center justify-between px-space-xs">
-          <div className="flex items-center gap-space-xs">
-            <span className="material-symbols-outlined text-primary text-[18px]">cloud_sync</span>
-            <h3 className="font-label-lg text-label-lg text-on-surface font-semibold">
-              Integrasi Google Sheets
-            </h3>
-          </div>
-          <span className="font-label-sm text-label-sm text-primary flex items-center gap-1 font-semibold">
-            <span
-              className={`w-2 h-2 rounded-full ${
-                syncStatus?.connected ? 'bg-tertiary animate-pulse' : 'bg-amber-500'
-              }`}
-            ></span>{' '}
-            {syncStatus?.connected ? 'Tersinkron Otomatis' : 'Mode Lokal'}
-          </span>
-        </div>
-
-        {/* Connection Card */}
-        <div className="bg-surface-container-lowest rounded-xl p-space-lg shadow-[0_4px_20px_-2px_rgba(15,118,110,0.06),0_2px_6px_-1px_rgba(0,0,0,0.04)] border border-surface-container flex flex-col gap-space-md">
-          {/* Status Badge & File Name */}
-          <div className="flex items-start justify-between gap-space-sm">
-            <div className="flex items-center gap-space-sm min-w-0">
-              <div
-                className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm ${
+      {/* 2. Grid Responsif Desktop (2 Kolom Seimbang) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+        {/* ==================== KOLOM KIRI ==================== */}
+        <div className="flex flex-col space-y-6">
+          {/* A. Integrasi Google Sheets */}
+          <section className="bg-white rounded-2xl p-4 sm:p-5 shadow-xs border border-surface-variant flex flex-col space-y-4">
+            <div className="flex items-center justify-between border-b border-surface-container pb-3">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-[20px] text-primary">cloud_sync</span>
+                <h3 className="text-sm sm:text-base font-bold text-on-surface">
+                  Integrasi Google Sheets
+                </h3>
+              </div>
+              <span
+                className={`text-xs px-2.5 py-0.5 rounded-full font-bold flex items-center gap-1.5 ${
                   syncStatus?.connected
-                    ? 'bg-tertiary-fixed text-on-tertiary-fixed'
-                    : 'bg-amber-100 text-amber-900'
+                    ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                    : 'bg-amber-50 text-amber-800 border border-amber-200'
                 }`}
               >
-                <span className="material-symbols-outlined text-[26px]">table_chart</span>
-              </div>
-              <div className="flex flex-col min-w-0">
-                <span className="font-headline-md text-headline-md text-on-surface font-bold truncate">
-                  {syncStatus?.spreadsheetName || 'Buku_Kas_MMD_1448H'}
-                </span>
-                <span className="font-body-sm text-body-sm text-on-surface-variant flex items-center gap-1">
-                  Status:{' '}
-                  <span className="font-mono text-[11px] bg-surface-container-low px-1.5 py-0.5 rounded font-semibold">
-                    {syncStatus?.connected ? 'Online Terhubung' : 'Lokal Fallback'}
-                  </span>
-                </span>
-              </div>
+                <span className={`w-2 h-2 rounded-full ${syncStatus?.connected ? 'bg-emerald-600' : 'bg-amber-500'}`} />
+                <span>{syncStatus?.connected ? 'Tersinkron' : 'Lokal Fallback'}</span>
+              </span>
             </div>
 
-            <span
-              className={`font-label-sm text-label-sm px-2.5 py-1 rounded-full flex items-center gap-1 flex-shrink-0 font-semibold shadow-sm ${
-                syncStatus?.connected
-                  ? 'bg-tertiary-fixed text-on-tertiary-fixed'
-                  : 'bg-amber-100 text-amber-900'
-              }`}
-            >
-              <span className="material-symbols-outlined text-[14px]">
-                {syncStatus?.connected ? 'verified' : 'info'}
-              </span>{' '}
-              {syncStatus?.connected ? 'Terhubung' : 'Belum Sync'}
-            </span>
-          </div>
-
-          {/* Sync Status & Details */}
-          <div className="bg-surface-container-low rounded-lg p-space-sm flex flex-col gap-space-xs">
-            <div className="flex items-center gap-space-xs text-on-surface-variant">
-              <span className="material-symbols-outlined text-[16px] text-primary">schedule</span>
-              <span className="font-body-sm text-body-sm">
-                Terakhir diperiksa:{' '}
-                <strong className="text-on-surface font-semibold">
+            <div className="bg-surface-container/60 rounded-xl p-3.5 space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-on-surface-variant">Spreadsheet Target:</span>
+                <span className="font-bold text-on-surface truncate max-w-[200px]">
+                  {syncStatus?.spreadsheetName || 'Laporan_Pengeluaran'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-on-surface-variant">Terakhir Diperiksa:</span>
+                <span className="font-semibold text-on-surface tabular-nums">
                   {syncStatus?.lastSyncTime || 'Hari ini'}
-                </strong>
-              </span>
-            </div>
-            {syncStatus?.error ? (
-              <p className="font-label-sm text-xs text-amber-800 bg-amber-50 p-2 rounded border border-amber-200 mt-1">
-                {syncStatus.error}
-              </p>
-            ) : (
-              <p className="font-label-sm text-label-sm text-on-surface-variant pl-5 opacity-90">
-                Setiap transaksi otomatis tersimpan ke tab Pengeluaran & Subsidi di Google Sheets.
-              </p>
-            )}
-          </div>
-
-          {/* Action Buttons */}
-          <div className="flex flex-col gap-space-sm pt-space-xs">
-            <button
-              onClick={handleTestConnection}
-              disabled={testingSync}
-              className="w-full h-11 rounded-xl bg-surface-container-high text-primary hover:bg-primary hover:text-on-primary transition-all font-label-md text-label-md flex items-center justify-center gap-space-xs active:scale-98 font-semibold"
-              type="button"
-            >
-              {testingSync ? (
-                <>
-                  <span className="material-symbols-outlined text-[18px] animate-spin">
-                    progress_activity
-                  </span>
-                  <span>Memeriksa Status Koneksi...</span>
-                </>
-              ) : (
-                <>
-                  <span className="material-symbols-outlined text-[18px]">sync</span>
-                  <span>Uji Koneksi Google Sheets</span>
-                </>
+                </span>
+              </div>
+              {syncStatus?.error && (
+                <p className="text-[11px] text-amber-800 bg-amber-50 p-2 rounded-lg border border-amber-200 mt-1">
+                  {syncStatus.error}
+                </p>
               )}
-            </button>
+            </div>
 
-            <a
-              href={process.env.NEXT_PUBLIC_SPREADSHEET_URL || 'https://docs.google.com/spreadsheets/d/1PAqCW-KV52-5X5GUn61tAhYst3kOd5TvJuHnRTQvfig/edit'}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-full text-center py-2 text-primary font-label-md text-label-md flex items-center justify-center gap-1 hover:underline"
-            >
-              <span>Buka Spreadsheet di Tab Baru</span>
-              <span className="material-symbols-outlined text-[16px]">open_in_new</span>
-            </a>
-
-            <button
-              onClick={() => setGuideModalOpen(true)}
-              className="w-full text-center py-1.5 text-on-surface-variant font-label-sm text-label-sm flex items-center justify-center gap-1 hover:text-primary"
-              type="button"
-            >
-              <span>Lihat Panduan Menghubungkan Google Sheets</span>
-              <span className="material-symbols-outlined text-[15px]">help_outline</span>
-            </button>
-          </div>
-        </div>
-      </section>
-
-      {/* 2. Kelola Periode Hijriyah (Section H) */}
-      <section className="flex flex-col gap-space-sm mb-space-xl">
-        <div className="flex items-center justify-between px-space-xs">
-          <div className="flex items-center gap-space-xs">
-            <span className="material-symbols-outlined text-primary text-[18px]">
-              calendar_month
-            </span>
-            <h3 className="font-label-lg text-label-lg text-on-surface font-semibold">
-              Kelola Periode Hijriyah
-            </h3>
-          </div>
-          <button
-            onClick={() => setPeriodModalOpen(true)}
-            className="h-8 px-3 rounded-full bg-primary text-on-primary hover:bg-primary-container font-label-sm text-label-sm flex items-center gap-1 active:scale-95 shadow-sm font-semibold"
-            type="button"
-          >
-            <span className="material-symbols-outlined text-[16px]">add</span>
-            <span>Tambah Periode</span>
-          </button>
-        </div>
-
-        <div className="flex flex-col gap-space-sm">
-          {periode.map(p => {
-            const isCurrentlyActive = p.statusAktif || selectedPeriode === p.labelPeriode;
-            return (
-              <div
-                key={p.id}
-                className="bg-surface-container-lowest rounded-xl p-space-md shadow-sm border border-surface-container flex items-center justify-between gap-space-sm"
+            <div className="flex flex-col gap-2 pt-1">
+              <button
+                onClick={handleTestConnection}
+                disabled={testingSync}
+                className="w-full h-11 rounded-xl bg-primary hover:bg-primary-container text-white text-xs font-semibold flex items-center justify-center gap-2 active:scale-95 transition-all shadow-xs disabled:opacity-50"
+                type="button"
               >
-                <div className="flex items-center gap-space-sm min-w-0">
-                  <div
-                    className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                      isCurrentlyActive
-                        ? 'bg-primary text-on-primary'
-                        : 'bg-surface-container text-on-surface-variant'
-                    }`}
-                  >
-                    <span className="material-symbols-outlined text-[20px]">calendar_today</span>
-                  </div>
-                  <div className="flex flex-col min-w-0">
-                    <span className="font-headline-md text-sm text-on-surface font-bold truncate">
-                      {p.labelPeriode}
+                {testingSync ? (
+                  <>
+                    <span className="material-symbols-outlined text-[17px] animate-spin">
+                      progress_activity
                     </span>
-                    <span className="text-[11px] text-on-surface-variant">
-                      {isCurrentlyActive ? 'Periode Aktif Pembukuan' : 'Periode Lainnya'}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-1.5 flex-shrink-0">
-                  {isCurrentlyActive ? (
-                    <span className="px-2.5 py-1 rounded-full bg-tertiary-fixed text-on-tertiary-fixed font-label-sm text-[11px] font-bold">
-                      Aktif
-                    </span>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => handleSetActivePeriod(p)}
-                      className="px-2.5 py-1 rounded-full bg-surface-container-high text-primary hover:bg-primary hover:text-on-primary text-[11px] font-semibold active:scale-95 transition-all"
-                    >
-                      Pilih Aktif
-                    </button>
-                  )}
-                  {periode.length > 1 && !isCurrentlyActive && (
-                    <button
-                      type="button"
-                      aria-label={`Hapus Periode ${p.labelPeriode}`}
-                      onClick={() => handleDeletePeriodClick(p)}
-                      className="w-8 h-8 rounded-full bg-surface-container-low text-on-surface-variant hover:text-error hover:bg-error-container/20 flex items-center justify-center active:scale-95 transition-colors"
-                      title="Hapus Periode"
-                    >
-                      <span className="material-symbols-outlined text-[17px]">delete</span>
-                    </button>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </section>
-
-      {/* 3. Kelola Kategori Transaksi */}
-      <section className="flex flex-col gap-space-sm mb-space-xl">
-        <div className="flex items-center justify-between px-space-xs">
-          <div className="flex items-center gap-space-xs">
-            <span className="material-symbols-outlined text-primary text-[18px]">category</span>
-            <h3 className="font-label-lg text-label-lg text-on-surface font-semibold">
-              Kategori Divisi Kas
-            </h3>
-          </div>
-          <button
-            onClick={openAddCategory}
-            className="h-8 px-3 rounded-full bg-primary text-on-primary hover:bg-primary-container font-label-sm text-label-sm flex items-center gap-1 active:scale-95 shadow-sm font-semibold"
-            type="button"
-          >
-            <span className="material-symbols-outlined text-[16px]">add</span>
-            <span>Tambah</span>
-          </button>
-        </div>
-
-        <div className="flex flex-col gap-space-sm">
-          {kategori.map(kat => (
-            <div
-              key={kat.id}
-              className="bg-surface-container-lowest rounded-xl p-space-md shadow-sm border border-surface-container flex items-center justify-between gap-space-sm"
-            >
-              <div className="flex items-center gap-space-sm min-w-0">
-                <div className="w-10 h-10 rounded-lg bg-surface-container-high text-primary flex items-center justify-center flex-shrink-0">
-                  <span className="material-symbols-outlined text-[20px]">
-                    {kat.iconName || 'account_balance'}
-                  </span>
-                </div>
-                <div className="flex flex-col min-w-0">
-                  <span className="font-headline-md text-sm text-on-surface font-semibold truncate">
-                    {kat.namaKategori}
-                  </span>
-                  <div className="flex items-center gap-space-xs mt-0.5">
-                    <span
-                      className={`font-label-sm text-[11px] font-medium ${
-                        kat.statusAktif ? 'text-tertiary' : 'text-on-surface-variant'
-                      }`}
-                    >
-                      {kat.statusAktif ? 'Aktif di Formulir' : 'Dinonaktifkan'}
-                    </span>
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center gap-1.5 flex-shrink-0">
-                <button
-                  aria-label={`Edit Kategori ${kat.namaKategori}`}
-                  className="w-9 h-9 rounded-full bg-surface-container-low text-on-surface-variant hover:text-primary hover:bg-surface-container flex items-center justify-center active:scale-95 flex-shrink-0 transition-colors"
-                  onClick={() => openEditCategory(kat)}
-                  type="button"
-                  title="Edit Nama Kategori"
-                >
-                  <span className="material-symbols-outlined text-[18px]">edit</span>
-                </button>
-                {kategori.length > 1 && (
-                  <button
-                    aria-label={`Hapus Kategori ${kat.namaKategori}`}
-                    className="w-9 h-9 rounded-full bg-surface-container-low text-on-surface-variant hover:text-error hover:bg-error-container/20 flex items-center justify-center active:scale-95 flex-shrink-0 transition-colors"
-                    onClick={() => handleDeleteCategoryClick(kat)}
-                    type="button"
-                    title="Hapus Kategori"
-                  >
-                    <span className="material-symbols-outlined text-[18px]">delete</span>
-                  </button>
+                    <span>Memeriksa Koneksi Google Apps Script...</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined text-[17px]">sync</span>
+                    <span>Uji Koneksi Google Sheets Sekarang</span>
+                  </>
                 )}
+              </button>
+
+              <div className="grid grid-cols-2 gap-2">
+                <a
+                  href={process.env.NEXT_PUBLIC_SPREADSHEET_URL || 'https://docs.google.com/spreadsheets/d/1PAqCW-KV52-5X5GUn61tAhYst3kOd5TvJuHnRTQvfig/edit'}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="h-10 rounded-xl bg-white hover:bg-surface-container text-primary border border-surface-variant text-xs font-semibold flex items-center justify-center gap-1 active:scale-95 transition-all"
+                >
+                  <span className="material-symbols-outlined text-[16px]">open_in_new</span>
+                  <span>Buka Spreadsheet</span>
+                </a>
+
+                <button
+                  onClick={() => setGuideModalOpen(true)}
+                  className="h-10 rounded-xl bg-white hover:bg-surface-container text-on-surface border border-surface-variant text-xs font-semibold flex items-center justify-center gap-1 active:scale-95 transition-all"
+                  type="button"
+                >
+                  <span className="material-symbols-outlined text-[16px]">help_outline</span>
+                  <span>Panduan Setup</span>
+                </button>
               </div>
             </div>
-          ))}
-        </div>
-      </section>
+          </section>
 
-      {/* 4. Informasi Aplikasi & Backup */}
-      <section className="flex flex-col gap-space-sm mb-space-xl">
-        <div className="flex items-center gap-space-xs px-space-xs">
-          <span className="material-symbols-outlined text-primary text-[18px]">info</span>
-          <h3 className="font-label-lg text-label-lg text-on-surface font-semibold">
-            Tentang Aplikasi & Data Kas
-          </h3>
+          {/* B. Pembersihan Cache Offline */}
+          <section className="bg-white rounded-2xl p-4 sm:p-5 shadow-xs border border-surface-variant flex flex-col space-y-3">
+            <div className="flex items-center gap-2 border-b border-surface-container pb-3">
+              <span className="material-symbols-outlined text-[20px] text-amber-800">cleaning_services</span>
+              <h3 className="text-sm sm:text-base font-bold text-on-surface">
+                Pembersihan Cache Offline
+              </h3>
+            </div>
+            <p className="text-xs text-on-surface-variant leading-relaxed">
+              Jika peramban Anda menampilkan data lama yang belum tersinkron, bersihkan cache lokal browser untuk memuat ulang kondisi kas terkini dari Google Sheets.
+            </p>
+            <button
+              onClick={() => setResetModalOpen(true)}
+              className="w-full h-10 rounded-xl bg-surface-container hover:bg-surface-container-high text-amber-900 border border-surface-variant text-xs font-semibold flex items-center justify-center gap-1.5 active:scale-95 transition-all shadow-2xs"
+              type="button"
+            >
+              <span className="material-symbols-outlined text-[17px]">cached</span>
+              <span>Bersihkan Cache & Sinkron Ulang</span>
+            </button>
+          </section>
         </div>
 
-        <div className="bg-surface-container-lowest rounded-xl p-space-lg shadow-sm border border-surface-container flex flex-col gap-space-md relative overflow-hidden">
-          <div className="flex items-center gap-space-md">
-            <img
-              alt="Logo Bendahara MMD - MIDA Sumbersari"
-              className="w-14 h-14 object-contain bg-surface-container-low p-1.5 rounded-xl flex-shrink-0 shadow-xs"
-              src="/logo.png"
-            />
-            <div className="flex flex-col min-w-0">
-              <div className="flex items-center gap-space-xs">
-                <span className="font-headline-md text-headline-md text-on-surface font-bold">
-                  Bendahara MMD
-                </span>
-                <span className="bg-secondary-fixed text-on-secondary-fixed font-label-sm text-label-sm px-2 py-0.5 rounded-full font-bold">
-                  AMANAH
-                </span>
+        {/* ==================== KOLOM KANAN ==================== */}
+        <div className="flex flex-col space-y-6">
+          {/* D. Kelola Periode Hijriyah */}
+          <section className="bg-white rounded-2xl p-4 sm:p-5 shadow-xs border border-surface-variant flex flex-col space-y-4">
+            <div className="flex items-center justify-between border-b border-surface-container pb-3">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-[20px] text-primary">calendar_month</span>
+                <h3 className="text-sm sm:text-base font-bold text-on-surface">
+                  Kelola Periode Hijriyah
+                </h3>
               </div>
-              <span className="font-body-sm text-body-sm text-on-surface-variant font-mono">
-                MIDA • Sumbersari, Kediri
-              </span>
+              <button
+                onClick={() => setPeriodModalOpen(true)}
+                className="h-8 px-3 rounded-lg bg-primary/8 hover:bg-primary/15 text-primary text-xs font-semibold flex items-center gap-1 active:scale-95 transition-all border border-primary/15"
+                type="button"
+              >
+                <span className="material-symbols-outlined text-[15px]">add</span>
+                <span>Tambah</span>
+              </button>
             </div>
-          </div>
 
-          <div className="flex flex-col gap-space-xs pt-space-xs text-xs divide-y divide-surface-container">
-            <div className="flex justify-between items-center py-1">
-              <span className="text-on-surface-variant">Lembaga</span>
-              <span className="font-semibold text-on-surface">Majelis Musyawarah & Dirosah</span>
-            </div>
-            <div className="flex justify-between items-center py-1">
-              <span className="text-on-surface-variant">Arsitektur</span>
-              <span className="font-semibold text-on-surface">Next.js + Google Apps Script</span>
-            </div>
-            <div className="flex justify-between items-center py-1">
-              <span className="text-on-surface-variant">Tata Kelola Kas</span>
-              <span className="text-primary font-medium">Amanah, Transparan, & Barokah</span>
-            </div>
-          </div>
+            <div className="space-y-2.5">
+              {periode.map(p => {
+                const isCurrentlyActive = p.statusAktif || selectedPeriode === p.labelPeriode;
+                return (
+                  <div
+                    key={p.id}
+                    className="p-3 rounded-xl bg-surface-container/50 border border-surface-variant flex items-center justify-between gap-3 hover:bg-surface-container transition-colors"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-8 h-8 rounded-lg bg-white border border-surface-variant flex items-center justify-center text-primary font-bold flex-shrink-0">
+                        <span className="material-symbols-outlined text-[17px]">calendar_today</span>
+                      </div>
+                      <div className="flex flex-col min-w-0">
+                        <span className="text-xs sm:text-sm font-bold text-on-surface truncate">
+                          {p.labelPeriode}
+                        </span>
+                        <span className="text-[11px] text-on-surface-variant">
+                          {isCurrentlyActive ? 'Periode Aktif Terpilih' : 'Arsip Pembukuan'}
+                        </span>
+                      </div>
+                    </div>
 
-          {/* Action Buttons Backup & Manual */}
-          <div className="grid grid-cols-2 gap-space-sm pt-space-xs">
-            <button
-              className="h-11 rounded-xl bg-surface-container-high text-primary hover:bg-surface-variant font-label-md text-label-md font-semibold flex items-center justify-center gap-1 active:scale-95 transition-transform"
-              onClick={handleDownloadBackup}
-              type="button"
-            >
-              <span className="material-symbols-outlined text-[18px]">cloud_download</span>
-              <span>Cadangkan Data</span>
-            </button>
-            <button
-              className="h-11 rounded-xl bg-surface-container-high text-on-surface hover:bg-surface-variant font-label-md text-label-md font-semibold flex items-center justify-center gap-1 active:scale-95 transition-transform"
-              onClick={() => setGuideModalOpen(true)}
-              type="button"
-            >
-              <span className="material-symbols-outlined text-[18px]">menu_book</span>
-              <span>Buka Panduan</span>
-            </button>
-          </div>
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      {isCurrentlyActive ? (
+                        <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-bold">
+                          Aktif
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleSetActivePeriod(p)}
+                          className="px-2.5 py-1 rounded-lg bg-white border border-surface-variant text-primary hover:bg-primary hover:text-white text-[11px] font-semibold active:scale-95 transition-all"
+                        >
+                          Pilih Aktif
+                        </button>
+                      )}
+
+                      {periode.length > 1 && !isCurrentlyActive && (
+                        <button
+                          type="button"
+                          onClick={() => handleDeletePeriodClick(p)}
+                          className="w-7 h-7 rounded-lg text-rose-700 hover:bg-rose-50 flex items-center justify-center active:scale-95 transition-colors"
+                          title="Hapus Periode"
+                          aria-label={`Hapus Periode ${p.labelPeriode}`}
+                        >
+                          <span className="material-symbols-outlined text-[16px]">delete</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+
+          {/* E. Kelola Kategori Divisi Kas */}
+          <section className="bg-white rounded-2xl p-4 sm:p-5 shadow-xs border border-surface-variant flex flex-col space-y-4">
+            <div className="flex items-center justify-between border-b border-surface-container pb-3">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-[20px] text-primary">category</span>
+                <h3 className="text-sm sm:text-base font-bold text-on-surface">
+                  Kategori Divisi Kas
+                </h3>
+              </div>
+              <button
+                onClick={openAddCategory}
+                className="h-8 px-3 rounded-lg bg-primary/8 hover:bg-primary/15 text-primary text-xs font-semibold flex items-center gap-1 active:scale-95 transition-all border border-primary/15"
+                type="button"
+              >
+                <span className="material-symbols-outlined text-[15px]">add</span>
+                <span>Tambah</span>
+              </button>
+            </div>
+
+            <div className="space-y-2.5">
+              {kategori.map(kat => (
+                <div
+                  key={kat.id}
+                  className="p-3 rounded-xl bg-surface-container/50 border border-surface-variant flex items-center justify-between gap-3 hover:bg-surface-container transition-colors"
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-8 h-8 rounded-lg bg-white border border-surface-variant text-primary flex items-center justify-center flex-shrink-0">
+                      <span className="material-symbols-outlined text-[18px]">
+                        {kat.iconName || 'account_balance'}
+                      </span>
+                    </div>
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-xs sm:text-sm font-bold text-on-surface truncate">
+                        {kat.namaKategori}
+                      </span>
+                      <span className="text-[11px] text-on-surface-variant">
+                        {kat.statusAktif ? 'Aktif dalam Formulir' : 'Dinonaktifkan'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => openEditCategory(kat)}
+                      className="p-1.5 rounded-lg text-primary hover:bg-primary/10 transition-colors"
+                      title="Edit Kategori"
+                      aria-label={`Edit ${kat.namaKategori}`}
+                    >
+                      <span className="material-symbols-outlined text-[17px]">edit</span>
+                    </button>
+                    {kategori.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteCategoryClick(kat)}
+                        className="p-1.5 rounded-lg text-rose-700 hover:bg-rose-50 transition-colors"
+                        title="Hapus Kategori"
+                        aria-label={`Hapus ${kat.namaKategori}`}
+                      >
+                        <span className="material-symbols-outlined text-[17px]">delete</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
         </div>
-      </section>
+      </div>
 
-      {/* 5. Pembersihan Cache & Reset Simulasi */}
-      <section className="flex flex-col gap-space-sm mb-space-xl">
-        <div className="flex items-center gap-space-xs px-space-xs">
-          <span className="material-symbols-outlined text-amber-700 text-[18px]">restart_alt</span>
-          <h3 className="font-label-lg text-label-lg text-on-surface font-semibold">
-            Pembersihan Data & Cache Browser
-          </h3>
-        </div>
-
-        <div className="bg-surface-container-lowest rounded-xl p-space-lg shadow-sm border border-amber-200/60 bg-amber-50/20 flex flex-col gap-space-sm">
-          <div className="flex items-start gap-space-sm">
-            <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-900 flex items-center justify-center flex-shrink-0">
-              <span className="material-symbols-outlined text-[22px]">cleaning_services</span>
-            </div>
-            <div className="flex flex-col min-w-0">
-              <span className="font-headline-md text-sm text-on-surface font-bold">
-                Bersihkan Data Uji Coba & Cache Lokal
-              </span>
-              <p className="font-body-sm text-xs text-on-surface-variant mt-0.5 leading-relaxed">
-                Jika Anda melihat data simulasi atau nama yang tidak pernah Anda masukkan, Anda dapat membersihkan cache browser dan mengembalikan data sistem ke kondisi awal yang bersih.
-              </p>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => setResetModalOpen(true)}
-            className="w-full h-11 mt-1 rounded-xl bg-surface-container-high hover:bg-amber-100 text-amber-950 font-label-md text-label-md font-semibold flex items-center justify-center gap-2 active:scale-95 transition-all border border-amber-300/40"
-          >
-            <span className="material-symbols-outlined text-[18px]">cached</span>
-            <span>Bersihkan Cache & Reset Data Awal</span>
-          </button>
-        </div>
-      </section>
-
-      {/* Modal Kelola Kategori */}
+      {/* Modal Kelola / Tambah Kategori */}
       {categoryModalOpen && (
         <div className="fixed inset-0 z-[100] bg-inverse-surface/40 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 overscroll-contain">
-          <div className="w-full max-w-[480px] bg-surface-container-lowest rounded-t-3xl sm:rounded-2xl shadow-2xl flex flex-col max-h-[90dvh] sm:max-h-[85vh] overflow-hidden animate-in slide-in-from-bottom duration-300">
-            {/* Modal Header */}
-            <div className="flex justify-between items-center px-space-lg py-space-md border-b border-surface-container flex-shrink-0 bg-surface-container-lowest">
-              <h3 className="font-headline-md text-headline-md text-on-surface font-bold">
-                {categoryToEdit ? 'Ubah Nama Kategori' : 'Tambah Kategori Baru'}
+          <div className="w-full max-w-md bg-white rounded-t-3xl sm:rounded-2xl shadow-xl flex flex-col max-h-[90dvh] overflow-hidden animate-in slide-in-from-bottom duration-200">
+            <div className="flex justify-between items-center px-5 py-4 border-b border-surface-container">
+              <h3 className="text-sm sm:text-base font-bold text-on-surface">
+                {categoryToEdit ? 'Ubah Nama Kategori Kas' : 'Tambah Kategori Kas Baru'}
               </h3>
               <button
-                className="w-8 h-8 rounded-full bg-surface-container-low text-on-surface-variant flex items-center justify-center active:scale-95 transition-all"
+                className="w-8 h-8 rounded-full bg-surface-container text-on-surface-variant flex items-center justify-center active:scale-95"
                 onClick={() => setCategoryModalOpen(false)}
                 type="button"
                 aria-label="Tutup"
@@ -762,15 +595,14 @@ export default function PengaturanPage() {
               </button>
             </div>
 
-            {/* Modal Scrollable Body */}
-            <div className="flex-1 overflow-y-auto overscroll-contain px-space-lg py-space-md flex flex-col gap-space-md">
-              <div className="flex flex-col gap-space-xs">
-                <label className="font-label-sm text-label-sm text-on-surface-variant uppercase font-semibold">
-                  Nama Kategori
+            <div className="p-5 space-y-4">
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-on-surface">
+                  Nama Kategori / Lajnah
                 </label>
                 <input
-                  className="w-full h-12 px-space-md bg-surface-container-lowest text-on-surface rounded-xl outline-none ring-1 ring-outline-variant focus:ring-2 focus:ring-primary font-body-md text-body-md transition-shadow"
-                  placeholder="Contoh: Takmir Masjid, Kitab Santri..."
+                  className="w-full h-11 px-3.5 bg-white text-on-surface rounded-xl border border-surface-variant focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm font-medium"
+                  placeholder="Contoh: Takmir Masjid, Takziran..."
                   type="text"
                   value={categoryNameInput}
                   onChange={e => setCategoryNameInput(e.target.value)}
@@ -778,50 +610,45 @@ export default function PengaturanPage() {
                 />
               </div>
 
-              <div className="flex items-center justify-between p-space-sm bg-surface-container-low rounded-xl">
+              <div className="flex items-center justify-between p-3 bg-surface-container/50 rounded-xl border border-surface-container">
                 <div className="flex flex-col">
-                  <span className="font-label-md text-label-md text-on-surface font-semibold">
-                    Status Kategori
-                  </span>
-                  <span className="font-body-sm text-xs text-on-surface-variant">
+                  <span className="text-xs font-bold text-on-surface">Status Kategori</span>
+                  <span className="text-[11px] text-on-surface-variant">
                     Tampilkan saat pencatatan transaksi
                   </span>
                 </div>
                 <button
-                  className={`w-12 h-7 rounded-full relative flex items-center px-1 transition-colors ${
+                  className={`w-11 h-6 rounded-full relative flex items-center px-1 transition-colors ${
                     categoryStatusInput ? 'bg-primary' : 'bg-surface-dim'
                   }`}
                   onClick={() => setCategoryStatusInput(!categoryStatusInput)}
                   type="button"
                 >
                   <span
-                    className={`w-5 h-5 rounded-full bg-white shadow-sm transform transition-transform ${
+                    className={`w-4 h-4 rounded-full bg-white shadow-xs transform transition-transform ${
                       categoryStatusInput ? 'translate-x-5' : 'translate-x-0'
                     }`}
-                  ></span>
+                  />
                 </button>
               </div>
             </div>
 
-            {/* Modal Sticky Footer */}
-            <div className="p-space-md sm:p-space-lg border-t border-surface-container flex-shrink-0 bg-surface-container-lowest pb-[max(1rem,env(safe-area-inset-bottom))]">
-              <div className="grid grid-cols-2 gap-space-sm">
-                <button
-                  className="h-11 rounded-xl bg-surface-container text-on-surface font-label-md text-label-md font-semibold active:scale-95 transition-transform"
-                  onClick={() => setCategoryModalOpen(false)}
-                  type="button"
-                >
-                  Batal
-                </button>
-                <button
-                  className="h-11 rounded-xl bg-primary text-on-primary font-label-md text-label-md font-semibold active:scale-95 shadow-sm disabled:opacity-50 transition-transform"
-                  onClick={handleSaveCategory}
-                  disabled={savingCategory}
-                  type="button"
-                >
-                  {savingCategory ? 'Menyimpan...' : 'Simpan Kategori'}
-                </button>
-              </div>
+            <div className="p-4 border-t border-surface-container grid grid-cols-2 gap-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
+              <button
+                className="h-10 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface text-xs font-semibold active:scale-95 transition-all"
+                onClick={() => setCategoryModalOpen(false)}
+                type="button"
+              >
+                Batal
+              </button>
+              <button
+                className="h-10 rounded-xl bg-primary hover:bg-primary-container text-white text-xs font-semibold active:scale-95 shadow-xs transition-all disabled:opacity-50"
+                onClick={handleSaveCategory}
+                disabled={savingCategory}
+                type="button"
+              >
+                {savingCategory ? 'Menyimpan...' : 'Simpan Kategori'}
+              </button>
             </div>
           </div>
         </div>
@@ -830,19 +657,16 @@ export default function PengaturanPage() {
       {/* Modal Tambah Periode Hijriyah */}
       {periodModalOpen && (
         <div className="fixed inset-0 z-[100] bg-inverse-surface/40 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 overscroll-contain">
-          <div className="w-full max-w-[480px] bg-surface-container-lowest rounded-t-3xl sm:rounded-2xl shadow-2xl flex flex-col max-h-[90dvh] sm:max-h-[85vh] overflow-hidden animate-in slide-in-from-bottom duration-300">
-            {/* Header */}
-            <div className="flex justify-between items-center px-space-lg py-space-md border-b border-surface-container flex-shrink-0 bg-surface-container-lowest">
+          <div className="w-full max-w-md bg-white rounded-t-3xl sm:rounded-2xl shadow-xl flex flex-col max-h-[90dvh] overflow-hidden animate-in slide-in-from-bottom duration-200">
+            <div className="flex justify-between items-center px-5 py-4 border-b border-surface-container">
               <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-primary text-[24px]">
-                  calendar_add_on
-                </span>
-                <h3 className="font-headline-md text-headline-md text-on-surface font-bold">
-                  Tambah Periode Baru
+                <span className="material-symbols-outlined text-primary text-[22px]">calendar_add_on</span>
+                <h3 className="text-sm sm:text-base font-bold text-on-surface">
+                  Tambah Periode Hijriyah
                 </h3>
               </div>
               <button
-                className="w-8 h-8 rounded-full bg-surface-container-low text-on-surface-variant flex items-center justify-center active:scale-95 transition-all"
+                className="w-8 h-8 rounded-full bg-surface-container text-on-surface-variant flex items-center justify-center active:scale-95"
                 onClick={() => setPeriodModalOpen(false)}
                 type="button"
                 aria-label="Tutup"
@@ -851,43 +675,27 @@ export default function PengaturanPage() {
               </button>
             </div>
 
-            {/* Scrollable Content */}
-            <div className="flex-1 overflow-y-auto overscroll-contain px-space-lg py-space-md flex flex-col gap-space-md">
-              <p className="font-body-sm text-xs text-on-surface-variant">
-                Buka pembukuan kas baru untuk siklus kalender Hijriyah pesantren MMD.
-              </p>
-
-              {/* Bulan Selector */}
-              <div className="flex flex-col gap-1">
-                <label className="font-label-sm text-label-sm text-on-surface font-semibold">
-                  Bulan Hijriyah
-                </label>
-                <div className="relative w-full">
-                  <select
-                    className="w-full h-11 bg-surface-container-low text-on-surface rounded-xl px-3 font-body-md text-body-md appearance-none pr-10 focus:outline-none border border-surface-container font-medium"
-                    value={selectedBulan}
-                    onChange={e => setSelectedBulan(e.target.value)}
-                  >
-                    {BULAN_HIJRIAH_LIST.map(b => (
-                      <option key={b} value={b}>
-                        {b}
-                      </option>
-                    ))}
-                  </select>
-                  <span className="material-symbols-outlined text-[20px] text-on-surface-variant pointer-events-none absolute right-3 top-1/2 -translate-y-1/2">
-                    expand_more
-                  </span>
-                </div>
+            <div className="p-5 space-y-4">
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-on-surface">Bulan Hijriyah</label>
+                <select
+                  className="w-full h-11 bg-white text-on-surface rounded-xl px-3 border border-surface-variant text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  value={selectedBulan}
+                  onChange={e => setSelectedBulan(e.target.value)}
+                >
+                  {BULAN_HIJRIAH_LIST.map(b => (
+                    <option key={b} value={b}>
+                      {b}
+                    </option>
+                  ))}
+                </select>
               </div>
 
-              {/* Tahun Stepper */}
-              <div className="flex flex-col gap-1">
-                <label className="font-label-sm text-label-sm text-on-surface font-semibold">
-                  Tahun Hijriyah
-                </label>
-                <div className="flex items-center bg-surface-container-low rounded-xl p-1 justify-between border border-surface-container">
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-on-surface">Tahun Hijriyah</label>
+                <div className="flex items-center bg-surface-container/60 rounded-xl p-1 justify-between border border-surface-variant">
                   <button
-                    className="w-10 h-10 rounded-lg bg-surface-container-lowest text-on-surface flex items-center justify-center shadow-sm active:scale-90 transition-transform"
+                    className="w-9 h-9 rounded-lg bg-white text-on-surface flex items-center justify-center shadow-xs active:scale-90"
                     onClick={() => setSelectedTahun(prev => Math.max(1400, prev - 1))}
                     type="button"
                   >
@@ -895,17 +703,15 @@ export default function PengaturanPage() {
                   </button>
                   <div className="flex items-baseline gap-1">
                     <input
-                      className="font-title-currency-md text-title-currency-md text-center font-bold text-on-surface bg-transparent w-20 focus:outline-none"
+                      className="text-center font-bold text-on-surface bg-transparent w-20 text-sm focus:outline-none tabular-nums"
                       type="number"
                       value={selectedTahun}
                       onChange={e => setSelectedTahun(parseInt(e.target.value, 10) || 1448)}
                     />
-                    <span className="font-label-md text-label-md text-on-surface-variant font-semibold">
-                      H
-                    </span>
+                    <span className="text-xs text-on-surface-variant font-semibold">H</span>
                   </div>
                   <button
-                    className="w-10 h-10 rounded-lg bg-surface-container-lowest text-on-surface flex items-center justify-center shadow-sm active:scale-90 transition-transform"
+                    className="w-9 h-9 rounded-lg bg-white text-on-surface flex items-center justify-center shadow-xs active:scale-90"
                     onClick={() => setSelectedTahun(prev => prev + 1)}
                     type="button"
                   >
@@ -914,150 +720,92 @@ export default function PengaturanPage() {
                 </div>
               </div>
 
-              {/* Checkbox Jadikan Aktif */}
-              <div className="bg-surface-container-low p-3 rounded-xl flex items-center gap-2 cursor-pointer">
+              <div className="bg-surface-container/50 p-3 rounded-xl flex items-center gap-2 border border-surface-container">
                 <input
-                  id="makeActive"
+                  id="makeActivePeriod"
                   type="checkbox"
                   checked={periodStatusAktif}
                   onChange={e => setPeriodStatusAktif(e.target.checked)}
                   className="w-4 h-4 rounded text-primary focus:ring-0 accent-primary cursor-pointer"
                 />
-                <label htmlFor="makeActive" className="text-xs text-on-surface font-semibold cursor-pointer">
-                  Jadikan sebagai periode pembukuan aktif sekarang
+                <label htmlFor="makeActivePeriod" className="text-xs text-on-surface font-semibold cursor-pointer">
+                  Jadikan periode pembukuan aktif sekarang
                 </label>
               </div>
             </div>
 
-            {/* Sticky Footer */}
-            <div className="p-space-md sm:p-space-lg border-t border-surface-container flex-shrink-0 bg-surface-container-lowest pb-[max(1rem,env(safe-area-inset-bottom))]">
-              <div className="grid grid-cols-2 gap-space-sm">
-                <button
-                  className="h-11 rounded-xl bg-surface-container text-on-surface font-label-md text-label-md font-semibold active:scale-95 transition-transform"
-                  onClick={() => setPeriodModalOpen(false)}
-                  type="button"
-                >
-                  Batal
-                </button>
-                <button
-                  className="h-11 rounded-xl bg-primary text-on-primary font-label-md text-label-md font-semibold active:scale-95 shadow-sm disabled:opacity-50 transition-transform"
-                  onClick={handleSavePeriod}
-                  disabled={savingPeriod}
-                  type="button"
-                >
-                  {savingPeriod ? 'Menyimpan...' : 'Buat Periode'}
-                </button>
-              </div>
+            <div className="p-4 border-t border-surface-container grid grid-cols-2 gap-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
+              <button
+                className="h-10 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface text-xs font-semibold active:scale-95 transition-all"
+                onClick={() => setPeriodModalOpen(false)}
+                type="button"
+              >
+                Batal
+              </button>
+              <button
+                className="h-10 rounded-xl bg-primary hover:bg-primary-container text-white text-xs font-semibold active:scale-95 shadow-xs transition-all disabled:opacity-50"
+                onClick={handleSavePeriod}
+                disabled={savingPeriod}
+                type="button"
+              >
+                {savingPeriod ? 'Menyimpan...' : 'Buat Periode'}
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Modal Panduan Lengkap Pemula */}
+      {/* Modal Panduan Menghubungkan Google Sheets */}
       {guideModalOpen && (
         <div className="fixed inset-0 z-[100] bg-inverse-surface/40 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 overscroll-contain">
-          <div className="w-full max-w-[480px] bg-surface-container-lowest rounded-t-3xl sm:rounded-2xl shadow-2xl flex flex-col max-h-[90dvh] sm:max-h-[85vh] overflow-hidden animate-in slide-in-from-bottom duration-300">
-            <div className="flex justify-between items-center px-space-lg py-space-md border-b border-surface-container flex-shrink-0 bg-surface-container-lowest">
+          <div className="w-full max-w-lg bg-white rounded-t-3xl sm:rounded-2xl shadow-xl flex flex-col max-h-[88dvh] overflow-hidden animate-in slide-in-from-bottom duration-200">
+            <div className="flex justify-between items-center px-5 py-4 border-b border-surface-container">
               <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-primary text-[24px]">menu_book</span>
-                <h3 className="font-headline-md text-headline-md text-on-surface font-bold">
+                <span className="material-symbols-outlined text-primary text-[22px]">menu_book</span>
+                <h3 className="text-sm sm:text-base font-bold text-on-surface">
                   Panduan Integrasi Google Sheets
                 </h3>
               </div>
               <button
-                className="w-8 h-8 rounded-full bg-surface-container-low text-on-surface-variant flex items-center justify-center active:scale-95 transition-all"
+                className="w-8 h-8 rounded-full bg-surface-container text-on-surface-variant flex items-center justify-center active:scale-95"
                 onClick={() => setGuideModalOpen(false)}
                 type="button"
-                aria-label="Tutup"
+                aria-label="Tutup Panduan"
               >
                 <span className="material-symbols-outlined text-[18px]">close</span>
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto overscroll-contain px-space-lg py-space-md flex flex-col gap-3 text-xs leading-relaxed text-on-surface-variant">
-              <p className="text-on-surface font-semibold">
-                Ikuti langkah mudah berikut untuk menghubungkan Google Sheets Anda dengan aplikasi Bendahara MMD:
-              </p>
-
-              <div className="bg-surface-container-low p-3 rounded-xl flex flex-col gap-1.5 border border-surface-container">
-                <span className="font-bold text-primary text-sm">Langkah 1: Buat Spreadsheet Baru</span>
+            <div className="p-5 overflow-y-auto overscroll-contain space-y-4 text-xs text-on-surface leading-relaxed">
+              <div className="p-3 bg-primary/8 rounded-xl border border-primary/15">
+                <p className="font-bold text-primary mb-1">Status Koneksi Aktif:</p>
                 <p>
-                  1. Buka <strong>sheets.google.com</strong> dan buat spreadsheet kosong baru.
-                  <br />
-                  2. Beri nama spreadsheet, misalnya <em>Buku_Kas_MMD_1448H</em>.
+                  Aplikasi telah dikonfigurasi langsung dengan Google Apps Script Web App. Setiap kali transaksi dicatat, data dikirim langsung ke spreadsheet tanpa perantara.
                 </p>
               </div>
 
-              <div className="bg-surface-container-low p-3 rounded-xl flex flex-col gap-1.5 border border-surface-container">
-                <span className="font-bold text-primary text-sm">Langkah 2: Buka Apps Script</span>
-                <p>
-                  1. Pada menu atas Google Sheets, klik <strong>Ekstensi</strong> &gt; <strong>Apps Script</strong>.
-                  <br />
-                  2. Hapus kode default, lalu salin seluruh isi file <code>google-apps-script/Code.gs</code> yang ada di folder project ini.
-                  <br />
-                  3. Klik ikon simpan (Save / Ctrl+S).
+              <div>
+                <h4 className="font-bold text-on-surface mb-1">1. Struktur Spreadsheet</h4>
+                <p className="text-on-surface-variant">
+                  Spreadsheet wajib memiliki dua sheet utama: <strong>Pengeluaran</strong> dan <strong>Subsidi</strong>.
                 </p>
               </div>
 
-              <div className="bg-surface-container-low p-3 rounded-xl flex flex-col gap-1.5 border border-surface-container">
-                <span className="font-bold text-primary text-sm">Langkah 3: Atur Script Properties (Token & ID)</span>
-                <p>
-                  1. Klik ikon gerigi ⚙️ (<strong>Setelan Proyek / Project Settings</strong>) di bilah kiri Apps Script.
-                  <br />
-                  2. Gulir ke <strong>Properti Skrip (Script Properties)</strong> &gt; klik <strong>Tambahkan properti skrip</strong>:
-                  <br />
-                  • <code>MMD_API_TOKEN</code>: masukkan token rahasia (contoh: <code>mmd-amanah-kas-secret</code>)
-                  <br />
-                  • <code>SPREADSHEET_ID</code>: ID spreadsheet kas Anda (opsional jika script dipasang di sheet kas)
+              <div>
+                <h4 className="font-bold text-on-surface mb-1">2. Pembaruan Kode Apps Script</h4>
+                <p className="text-on-surface-variant">
+                  Kode Google Apps Script tersimpan di berkas <code>google-apps-script/Code.gs</code>. Jika melakukan update, deploy versi baru di Google Apps Script editor.
                 </p>
-              </div>
-
-              <div className="bg-surface-container-low p-3 rounded-xl flex flex-col gap-1.5 border border-surface-container">
-                <span className="font-bold text-primary text-sm">Langkah 4: Deploy sebagai Web App</span>
-                <p>
-                  1. Klik tombol <strong>Deploy</strong> (kanan atas) &gt; <strong>Penerapan baru (New deployment)</strong>.
-                  <br />
-                  2. Pilih jenis: <strong>Aplikasi Web (Web App)</strong>.
-                  <br />
-                  3. Isi deskripsi: <em>API Kas MMD</em>.
-                  <br />
-                  4. Jalankan sebagai: <strong>Saya (email Anda)</strong>.
-                  <br />
-                  5. Siapa yang memiliki akses: <strong>Siapa saja (Anyone)</strong>.
-                  <br />
-                  6. Klik <strong>Deploy</strong> dan beri izin akses saat diminta Google.
-                  <br />
-                  7. Salin <strong>URL Aplikasi Web (Web App URL)</strong> yang berakhiran <code>/exec</code>.
-                </p>
-              </div>
-
-              <div className="bg-surface-container-low p-3 rounded-xl flex flex-col gap-1.5 border border-surface-container">
-                <span className="font-bold text-primary text-sm">Langkah 5: Masukkan Konfigurasi ke Backend</span>
-                <p>
-                  Buka file <code>.env.local</code> (atau Environment Variables di Vercel), lalu isi 4 variabel wajib:
-                  <br />
-                  <code className="block bg-surface-container-lowest p-1.5 rounded font-mono text-[11px] text-primary mt-1 border">
-                    GOOGLE_SCRIPT_URL=https://script.google.com/macros/s/XXX/exec<br />
-                    GOOGLE_SCRIPT_TOKEN=mmd-amanah-kas-secret<br />
-                    ADMIN_PIN=144805<br />
-                    ADMIN_SESSION_SECRET=string_acak_minimal_32_karakter
-                  </code>
-                </p>
-              </div>
-
-              <div className="bg-primary/5 p-3 rounded-xl border border-primary/20 text-primary">
-                <span className="font-bold block mb-1">Keamanan Terjamin!</span>
-                Semua komunikasi browser dilakukan melalui backend server aplikasi Next.js sehingga kredensial Google Anda tidak pernah terekspos ke publik.
               </div>
             </div>
 
-            <div className="p-space-md sm:p-space-lg border-t border-surface-container flex-shrink-0 bg-surface-container-lowest pb-[max(1rem,env(safe-area-inset-bottom))]">
+            <div className="p-4 border-t border-surface-container pb-[max(1rem,env(safe-area-inset-bottom))]">
               <button
+                className="w-full h-10 rounded-xl bg-primary text-white text-xs font-semibold active:scale-95 transition-all shadow-xs"
                 onClick={() => setGuideModalOpen(false)}
-                className="w-full h-11 bg-primary text-on-primary rounded-xl font-label-md text-label-md font-semibold active:scale-95 shadow-sm transition-transform"
                 type="button"
               >
-                Saya Mengerti
+                Mengerti & Tutup
               </button>
             </div>
           </div>
@@ -1067,8 +815,8 @@ export default function PengaturanPage() {
       {/* Modal Konfirmasi Hapus Periode */}
       <DeleteConfirmModal
         isOpen={deletePeriodModalOpen}
-        title="Hapus Periode Pembukuan?"
-        message={`Apakah Anda yakin ingin menghapus periode "${periodToDelete?.labelPeriode}"? Tindakan ini tidak dapat dibatalkan.`}
+        title="Hapus Periode Hijriyah?"
+        message={`Apakah Anda yakin ingin menghapus periode "${periodToDelete?.labelPeriode}"? Transaksi pada periode ini tidak akan terhapus, namun tidak dapat dipilih sebagai periode aktif.`}
         onConfirm={handleConfirmDeletePeriod}
         onCancel={() => {
           setDeletePeriodModalOpen(false);
@@ -1081,7 +829,7 @@ export default function PengaturanPage() {
       <DeleteConfirmModal
         isOpen={deleteCategoryModalOpen}
         title="Hapus Kategori Kas?"
-        message={`Apakah Anda yakin ingin menghapus kategori "${categoryToDelete?.namaKategori}"?`}
+        message={`Apakah Anda yakin ingin menghapus kategori "${categoryToDelete?.namaKategori}"? Catatan transaksi yang telah menggunakan kategori ini akan tetap aman.`}
         onConfirm={handleConfirmDeleteCategory}
         onCancel={() => {
           setDeleteCategoryModalOpen(false);
@@ -1090,11 +838,11 @@ export default function PengaturanPage() {
         loading={deletingCategory}
       />
 
-      {/* Modal Konfirmasi Reset Cache & Data */}
+      {/* Modal Konfirmasi Reset Cache */}
       <DeleteConfirmModal
         isOpen={resetModalOpen}
-        title="Bersihkan Cache & Reset Data Awal?"
-        message="Tindakan ini akan mengosongkan seluruh data simulasi pengujian dan membersihkan cache browser Anda sehingga aplikasi kembali bersih ke kondisi awal."
+        title="Bersihkan Cache & Reset Data?"
+        message="Tindakan ini akan menghapus cache lokal browser dan mengembalikan database lokal ke kondisi bersih. Data yang telah tersinkron di Google Sheets tetap aman."
         onConfirm={handleConfirmReset}
         onCancel={() => setResetModalOpen(false)}
         loading={resetting}
