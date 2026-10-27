@@ -25,6 +25,11 @@ export default function SubsidiPage() {
   const [subsidyToDelete, setSubsidyToDelete] = useState<SubsidiItem | null>(null);
   const [deleting, setDeleting] = useState(false);
 
+  // Revalidasi data otomatis saat halaman Subsidi dibuka di perangkat manapun
+  React.useEffect(() => {
+    refreshData().catch(() => {});
+  }, [refreshData]);
+
   // Filter riwayat subsidi untuk periode aktif
   const currentPeriodSubsidies = subsidi.filter(s => {
     if (!selectedPeriode || selectedPeriode === 'Semua' || selectedPeriode === 'Semua Periode') return true;

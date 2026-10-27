@@ -678,15 +678,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           (s: any) => !pendingSubsidiList.includes(String(s.id || '').trim())
         );
 
-        // 2. Gabungkan dengan item lokal yang baru ditambahkan (jangan sampai tertimpa)
+        // 2. Gabungkan subsidi remote dengan HANYA draft lokal yang belum pernah tersinkron (status 'pending')
         setSubsidi(prevLocal => {
           const merged = [...remoteSubsidi];
           for (const localItem of prevLocal) {
             const localId = String(localItem.id || '').trim();
             if (pendingSubsidiList.includes(localId)) continue;
-            const existsInRemote = merged.some(r => String(r.id || '').trim() === localId);
-            if (!existsInRemote) {
-              merged.unshift(localItem);
+            // Hanya pertahankan draft offline yang belum pernah tersimpan di server
+            if (localItem.syncStatus === 'pending') {
+              const existsInRemote = merged.some(r => String(r.id || '').trim() === localId);
+              if (!existsInRemote) {
+                merged.unshift(localItem);
+              }
             }
           }
           saveToOfflineCache('subsidi', merged);
@@ -698,15 +701,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           (p: any) => !pendingPengeluaranList.includes(String(p.id || '').trim())
         );
 
-        // 4. Gabungkan dengan item lokal
+        // 4. Gabungkan pengeluaran remote dengan HANYA draft lokal yang belum pernah tersinkron (status 'pending')
         setPengeluaran(prevLocal => {
           const merged = [...remotePengeluaran];
           for (const localItem of prevLocal) {
             const localId = String(localItem.id || '').trim();
             if (pendingPengeluaranList.includes(localId)) continue;
-            const existsInRemote = merged.some(r => String(r.id || '').trim() === localId);
-            if (!existsInRemote) {
-              merged.unshift(localItem);
+            // Hanya pertahankan draft offline yang belum pernah tersimpan di server
+            if (localItem.syncStatus === 'pending') {
+              const existsInRemote = merged.some(r => String(r.id || '').trim() === localId);
+              if (!existsInRemote) {
+                merged.unshift(localItem);
+              }
             }
           }
           saveToOfflineCache('pengeluaran', merged);

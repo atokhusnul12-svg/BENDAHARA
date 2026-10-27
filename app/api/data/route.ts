@@ -35,13 +35,22 @@ export async function GET(request: NextRequest) {
       filterKategori
     );
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        ...data,
-        summary,
+    return NextResponse.json(
+      {
+        success: true,
+        data: {
+          ...data,
+          summary,
+        },
       },
-    });
+      {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+          Pragma: 'no-cache',
+          Expires: '0',
+        },
+      }
+    );
   } catch (error: any) {
     return NextResponse.json(
       { success: false, error: error.message || 'Gagal memuat data keuangan.' },

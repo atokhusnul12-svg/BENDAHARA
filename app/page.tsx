@@ -14,12 +14,18 @@ export default function HomePage() {
     setSelectedPeriode,
     summary,
     syncStatus,
+    refreshData,
     openExpenseModal,
     openSubsidyModal,
   } = useApp();
 
   const [periodDropdownOpen, setPeriodDropdownOpen] = useState(false);
   const dropdownRef = React.useRef<HTMLDivElement>(null);
+
+  // Revalidasi data otomatis saat Dashboard dibuka
+  React.useEffect(() => {
+    refreshData().catch(() => {});
+  }, [refreshData]);
 
   React.useEffect(() => {
     if (!periodDropdownOpen) return;

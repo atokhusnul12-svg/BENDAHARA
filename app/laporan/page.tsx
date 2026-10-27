@@ -28,6 +28,11 @@ export default function LaporanPage() {
   const [itemToDelete, setItemToDelete] = useState<PengeluaranItem | null>(null);
   const [deleting, setDeleting] = useState(false);
 
+  // Revalidasi data otomatis saat halaman Laporan dibuka di perangkat manapun
+  React.useEffect(() => {
+    refreshData().catch(() => {});
+  }, [refreshData]);
+
   // Filter pengeluaran berdasarkan periode, kategori, dan search query
   const filteredList = pengeluaran.filter(item => {
     const isAllPeriods = !selectedPeriode || selectedPeriode === 'Semua' || selectedPeriode === 'Semua Periode';

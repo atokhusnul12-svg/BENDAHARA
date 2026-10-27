@@ -58,6 +58,12 @@ export async function POST(request: NextRequest) {
 
     const remoteConfirmed = Boolean(result.remoteConfirmed);
 
+    const NO_CACHE_HEADERS = {
+      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+      Pragma: 'no-cache',
+      Expires: '0',
+    };
+
     return NextResponse.json({
       success: true,
       remoteConfirmed,
@@ -65,11 +71,11 @@ export async function POST(request: NextRequest) {
         ? 'Pengeluaran berhasil disimpan dan terkonfirmasi di Google Sheets.'
         : 'Pengeluaran berhasil disimpan ke penyimpanan lokal (menunggu sinkronisasi).',
       data: result.data,
-    });
+    }, { headers: NO_CACHE_HEADERS });
   } catch (error: any) {
     return NextResponse.json(
       { success: false, error: error.message || 'Terjadi kesalahan saat memproses pengeluaran.' },
-      { status: 500 }
+      { status: 500, headers: { 'Cache-Control': 'no-store, no-cache' } }
     );
   }
 }
@@ -112,11 +118,17 @@ export async function PUT(request: NextRequest) {
       message: isGSheets
         ? 'Transaksi pengeluaran berhasil diperbarui di Google Sheets.'
         : 'Transaksi pengeluaran berhasil diperbarui.',
+    }, {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+        Pragma: 'no-cache',
+        Expires: '0',
+      },
     });
   } catch (error: any) {
     return NextResponse.json(
       { success: false, error: error.message || 'Gagal mengubah data pengeluaran.' },
-      { status: 500 }
+      { status: 500, headers: { 'Cache-Control': 'no-store, no-cache' } }
     );
   }
 }
@@ -126,7 +138,7 @@ export async function DELETE(request: NextRequest) {
     if (!verifyAdminRequest(request)) {
       return NextResponse.json(
         { success: false, error: 'Akses ditolak: Diperlukan autentikasi PIN Bendahara.' },
-        { status: 401 }
+        { status: 401, headers: { 'Cache-Control': 'no-store, no-cache' } }
       );
     }
 
@@ -134,12 +146,12 @@ export async function DELETE(request: NextRequest) {
     const id = searchParams.get('id');
 
     if (!id) {
-      return NextResponse.json({ success: false, error: 'Parameter ID transaksi pengeluaran wajib ada.' }, { status: 400 });
+      return NextResponse.json({ success: false, error: 'Parameter ID transaksi pengeluaran wajib ada.' }, { status: 400, headers: { 'Cache-Control': 'no-store, no-cache' } });
     }
 
     const result = await deletePengeluaran(id);
     if (!result.success) {
-      return NextResponse.json({ success: false, error: result.error }, { status: 500 });
+      return NextResponse.json({ success: false, error: result.error }, { status: 500, headers: { 'Cache-Control': 'no-store, no-cache' } });
     }
 
     const isGSheets = Boolean(process.env.GOOGLE_SCRIPT_URL?.trim());
@@ -149,11 +161,17 @@ export async function DELETE(request: NextRequest) {
       message: isGSheets
         ? 'Transaksi pengeluaran berhasil dihapus dari Google Sheets.'
         : 'Transaksi pengeluaran berhasil dihapus.',
+    }, {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+        Pragma: 'no-cache',
+        Expires: '0',
+      },
     });
   } catch (error: any) {
     return NextResponse.json(
       { success: false, error: error.message || 'Gagal menghapus transaksi.' },
-      { status: 500 }
+      { status: 500, headers: { 'Cache-Control': 'no-store, no-cache' } }
     );
   }
 }

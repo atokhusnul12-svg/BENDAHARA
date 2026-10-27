@@ -554,10 +554,13 @@ export async function getAllData(): Promise<{
           }));
 
         const mergedPeriode = [...remotePers];
-        for (const defPer of DEFAULT_PERIODE) {
-          if (!pendingDeletedPeriodeIds.has(defPer.id) && !mergedPeriode.some(p => p.labelPeriode.toLowerCase() === defPer.labelPeriode.toLowerCase())) {
-            mergedPeriode.unshift(defPer);
-            callGoogleAppsScript('createPeriode', { data: defPer }).catch(() => {});
+        // Hanya seed default jika remote Google Sheets benar-benar kosong (setup awal)
+        if (mergedPeriode.length === 0) {
+          for (const defPer of DEFAULT_PERIODE) {
+            if (!pendingDeletedPeriodeIds.has(defPer.id)) {
+              mergedPeriode.push(defPer);
+              callGoogleAppsScript('createPeriode', { data: defPer }).catch(() => {});
+            }
           }
         }
         localDb.periode = mergedPeriode;
@@ -591,10 +594,13 @@ export async function getAllData(): Promise<{
           }));
 
         const mergedKategori = [...remoteKats];
-        for (const defKat of DEFAULT_KATEGORI) {
-          if (!pendingDeletedKategoriIds.has(defKat.id) && !mergedKategori.some(k => matchCategory(k.namaKategori, defKat))) {
-            mergedKategori.unshift(defKat);
-            callGoogleAppsScript('createKategori', { data: defKat }).catch(() => {});
+        // Hanya seed default jika remote Google Sheets benar-benar kosong (setup awal)
+        if (mergedKategori.length === 0) {
+          for (const defKat of DEFAULT_KATEGORI) {
+            if (!pendingDeletedKategoriIds.has(defKat.id)) {
+              mergedKategori.push(defKat);
+              callGoogleAppsScript('createKategori', { data: defKat }).catch(() => {});
+            }
           }
         }
         localDb.kategori = mergedKategori;

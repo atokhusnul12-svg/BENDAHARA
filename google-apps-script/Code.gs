@@ -724,8 +724,12 @@ function handleDeleteSubsidi(ss, id, payload) {
   const res = deleteRowById(ss, 'Subsidi', id);
   if (res.success) return res;
 
-  // Jika memang tidak ditemukan di Google Sheets (karena sudah dihapus atau hanya ada di CSV), kembalikan status bersih
-  return { success: true, message: 'Catatan subsidi telah dibersihkan dari pencatatan.', id: id };
+  // Jika memang tidak ditemukan di Google Sheets (karena sudah dihapus sebelumnya atau hanya ada di CSV publik), kembalikan status bersih
+  if (res.error && (res.error.toLowerCase().includes('tidak ditemukan') || res.error.toLowerCase().includes('kosong'))) {
+    return { success: true, message: 'Catatan subsidi telah dibersihkan dari pencatatan.', id: id };
+  }
+
+  return res;
 }
 
 /**
