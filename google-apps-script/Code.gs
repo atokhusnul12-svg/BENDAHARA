@@ -131,47 +131,50 @@ function doGet(e) {
  * Endpoint POST - Pintu Masuk Seluruh Operasi CRUD yang Dilindungi
  */
 function doPost(e) {
+  let payload;
+  try {
+    payload = JSON.parse(e.postData.contents);
+  } catch (parseErr) {
+    return jsonResponse({ success: false, error: 'Format JSON permintaan tidak valid.' });
+  }
+
+  // 1. Validasi Token Otorisasi
+  if (!validateAuth(payload.token)) {
+    return jsonResponse({
+      success: false,
+      error: 'Akses ditolak: Token autentikasi salah atau belum diatur pada Script Properties (MMD_API_TOKEN).'
+    });
+  }
+
+  const action = payload.action;
+  const ss = getSpreadsheet();
+  if (!ss) {
+    return jsonResponse({ success: false, error: 'Tidak dapat menemukan Spreadsheet tujuan.' });
+  }
+
+  // 2. Operasi Read-Only (ping, getData, init) dijalankan langsung tanpa antrean Write Lock
+  if (action === 'ping') {
+    return jsonResponse(handlePing(ss));
+  }
+  if (action === 'getData') {
+    return jsonResponse(handleGetData(ss, payload.filters));
+  }
+  if (action === 'init') {
+    ensureSheetsInitialized(ss);
+    return jsonResponse({ success: true, message: 'Inisialisasi tabel Google Sheets berhasil.' });
+  }
+
+  // 3. Operasi Mutasi Data (Write) dikunci dengan LockService untuk mencegah konflik bersamaan
   const lock = LockService.getScriptLock();
   try {
-    // Kunci proses selama maksimal 30 detik untuk mencegah konflik penulisan bersamaan
     lock.waitLock(30000);
 
-    let payload;
-    try {
-      payload = JSON.parse(e.postData.contents);
-    } catch (parseErr) {
-      return jsonResponse({ success: false, error: 'Format JSON permintaan tidak valid.' });
-    }
-
-    // 1. Validasi Token Otorisasi
-    if (!validateAuth(payload.token)) {
-      return jsonResponse({
-        success: false,
-        error: 'Akses ditolak: Token autentikasi salah atau belum diatur pada Script Properties (MMD_API_TOKEN).'
-      });
-    }
-
-    const action = payload.action;
-    const ss = getSpreadsheet();
-    if (!ss) {
-      return jsonResponse({ success: false, error: 'Tidak dapat menemukan Spreadsheet tujuan.' });
-    }
-
-    // 2. Pastikan sheet master terinisialisasi dengan aman tanpa merusak sheet yang ada
+    // Pastikan sheet master terinisialisasi dengan aman tanpa merusak sheet yang ada
     ensureSheetsInitialized(ss);
 
-    // 3. Eksekusi action yang diminta
+    // Eksekusi action mutasi yang diminta
     let result;
     switch (action) {
-      case 'ping':
-        result = handlePing(ss);
-        break;
-      case 'init':
-        result = { success: true, message: 'Inisialisasi tabel Google Sheets berhasil.' };
-        break;
-      case 'getData':
-        result = handleGetData(ss, payload.filters);
-        break;
       case 'createPengeluaran':
         result = handleCreatePengeluaran(ss, payload.data);
         break;

@@ -224,7 +224,7 @@ export async function syncFromPublishedCsv(
         'Cache-Control': 'no-cache, no-store, must-revalidate',
         Pragma: 'no-cache',
       },
-      signal: AbortSignal.timeout(15000),
+      signal: AbortSignal.timeout(25000),
     });
 
     if (!res.ok) {

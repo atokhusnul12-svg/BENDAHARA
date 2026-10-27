@@ -108,7 +108,7 @@ export default function LaporanPage() {
   const handleOpenGoogleSheets = () => {
     const sheetsUrl =
       process.env.NEXT_PUBLIC_SPREADSHEET_URL ||
-      'https://docs.google.com/spreadsheets/d/1hmSi654XDAybgL0ishZxdTJBn_UmvCyGlvFQrEaKnt0/edit';
+      'https://docs.google.com/spreadsheets/d/1PAqCW-KV52-5X5GUn61tAhYst3kOd5TvJuHnRTQvfig/edit';
     window.open(sheetsUrl, '_blank');
   };
 
@@ -195,30 +195,30 @@ export default function LaporanPage() {
         </div>
 
         {/* Quick Action Export Buttons */}
-        <div className="grid grid-cols-3 gap-2 pt-space-xs">
+        <div className="grid grid-cols-3 gap-1.5 sm:gap-2 pt-space-xs">
           <button
             onClick={handleDownloadExcel}
-            className="flex items-center justify-center gap-1 py-2 px-2 rounded-lg bg-surface-container-low text-primary font-label-sm text-label-sm font-semibold active:scale-95 transition-transform hover:bg-surface-container border border-surface-container"
+            className="flex items-center justify-center gap-1 py-2 px-1.5 sm:px-2 rounded-lg bg-surface-container-low text-primary text-[11px] sm:text-label-sm font-semibold active:scale-95 transition-transform hover:bg-surface-container border border-surface-container min-w-0"
             type="button"
           >
-            <span className="material-symbols-outlined text-[16px]">table_view</span>
-            <span>Unduh Excel</span>
+            <span className="material-symbols-outlined text-[15px] sm:text-[16px] flex-shrink-0">table_view</span>
+            <span className="truncate">Unduh Excel</span>
           </button>
           <button
             onClick={handlePrint}
-            className="flex items-center justify-center gap-1 py-2 px-2 rounded-lg bg-surface-container-low text-on-surface font-label-sm text-label-sm font-semibold active:scale-95 transition-transform hover:bg-surface-container border border-surface-container"
+            className="flex items-center justify-center gap-1 py-2 px-1.5 sm:px-2 rounded-lg bg-surface-container-low text-on-surface text-[11px] sm:text-label-sm font-semibold active:scale-95 transition-transform hover:bg-surface-container border border-surface-container min-w-0"
             type="button"
           >
-            <span className="material-symbols-outlined text-[16px]">print</span>
-            <span>Cetak PDF</span>
+            <span className="material-symbols-outlined text-[15px] sm:text-[16px] flex-shrink-0">print</span>
+            <span className="truncate">Cetak PDF</span>
           </button>
           <button
             onClick={handleOpenGoogleSheets}
-            className="flex items-center justify-center gap-1 py-2 px-2 rounded-lg bg-primary-container text-on-primary font-label-sm text-label-sm font-semibold shadow-sm active:scale-95 transition-transform hover:bg-primary"
+            className="flex items-center justify-center gap-1 py-2 px-1.5 sm:px-2 rounded-lg bg-primary-container text-on-primary text-[11px] sm:text-label-sm font-semibold shadow-sm active:scale-95 transition-transform hover:bg-primary min-w-0"
             type="button"
           >
-            <span className="material-symbols-outlined text-[16px]">open_in_new</span>
-            <span>Buka Sheets</span>
+            <span className="material-symbols-outlined text-[15px] sm:text-[16px] flex-shrink-0">open_in_new</span>
+            <span className="truncate">Buka Sheets</span>
           </button>
         </div>
       </div>

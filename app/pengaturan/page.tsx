@@ -87,16 +87,19 @@ export default function PengaturanPage() {
   const handleTestConnection = async () => {
     setTestingSync(true);
     try {
-      const res = await fetch('/api/status');
+      const res = await fetch('/api/status', {
+        signal: AbortSignal.timeout(12000),
+      });
       const json = await res.json();
-      await refreshData();
       if (json.data?.connected) {
         showToast('Koneksi Google Sheets Berhasil', 'Spreadsheet tersinkronisasi sempurna.');
       } else {
         showToast('Pemeriksaan Selesai', json.data?.error || 'Aplikasi dalam mode penyimpanan lokal.', 'info');
       }
+      // Perbarui data di background tanpa memblokir tombol
+      refreshData().catch(() => {});
     } catch (e: any) {
-      showToast('Gagal memeriksa koneksi', e.message, 'error');
+      showToast('Gagal memeriksa koneksi', e.message || 'Waktu koneksi habis.', 'error');
     } finally {
       setTestingSync(false);
     }
@@ -462,7 +465,7 @@ export default function PengaturanPage() {
             </button>
 
             <a
-              href={process.env.NEXT_PUBLIC_SPREADSHEET_URL || 'https://docs.google.com/spreadsheets/d/1hmSi654XDAybgL0ishZxdTJBn_UmvCyGlvFQrEaKnt0/edit'}
+              href={process.env.NEXT_PUBLIC_SPREADSHEET_URL || 'https://docs.google.com/spreadsheets/d/1PAqCW-KV52-5X5GUn61tAhYst3kOd5TvJuHnRTQvfig/edit'}
               target="_blank"
               rel="noopener noreferrer"
               className="w-full text-center py-2 text-primary font-label-md text-label-md flex items-center justify-center gap-1 hover:underline"

@@ -169,7 +169,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // Periksa status autentikasi admin ke server
   const checkAuthStatus = useCallback(async () => {
     try {
-      const res = await fetch('/api/auth');
+      const res = await fetch('/api/auth', {
+        signal: AbortSignal.timeout(8000),
+      });
       const json = await res.json();
       setIsAdmin(Boolean(json.authenticated));
       return Boolean(json.authenticated);

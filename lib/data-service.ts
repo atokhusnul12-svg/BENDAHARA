@@ -297,8 +297,8 @@ async function callGoogleAppsScript(action: string, payloadData: any = {}): Prom
       }),
       // Apps Script Web Apps sering me-redirect (302) ke script.googleusercontent.com
       redirect: 'follow',
-      // Timeout 15 detik agar tidak menggantung fungsi serverless
-      signal: AbortSignal.timeout(15000),
+      // Timeout 25 detik agar Google Apps Script memiliki cukup waktu untuk cold start
+      signal: AbortSignal.timeout(25000),
     });
 
     if (!response.ok) {
@@ -334,7 +334,6 @@ async function callGoogleAppsScript(action: string, payloadData: any = {}): Prom
  */
 export async function checkSyncStatus(): Promise<SyncStatus> {
   const scriptUrl = getEffectiveScriptConfig().url;
-  const spreadsheetUrl = process.env.GOOGLE_SPREADSHEET_URL?.trim() || '';
   const now = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });
 
   if (!scriptUrl) {
@@ -352,12 +351,35 @@ export async function checkSyncStatus(): Promise<SyncStatus> {
   if (result.success) {
     return {
       connected: true,
-      spreadsheetName: result.spreadsheetName || 'Buku_Kas_MMD_1448H',
+      spreadsheetName: result.spreadsheetName || 'Laporan_Pengeluaran',
       spreadsheetId: result.spreadsheetId || 'Tersinkron',
       lastSyncTime: now + ' WIB',
       isLocalFallback: false,
     };
   } else {
+    // Fallback: Jika POST 'ping' terhambat, coba pemeriksaan cepat via GET
+    try {
+      const getRes = await fetch(scriptUrl, {
+        method: 'GET',
+        redirect: 'follow',
+        signal: AbortSignal.timeout(10000),
+      });
+      if (getRes.ok) {
+        const getJson = await getRes.json();
+        if (getJson.success || getJson.status === 'online') {
+          return {
+            connected: true,
+            spreadsheetName: getJson.spreadsheetName || 'Laporan_Pengeluaran',
+            spreadsheetId: getJson.spreadsheetId || 'Tersinkron',
+            lastSyncTime: now + ' WIB',
+            isLocalFallback: false,
+          };
+        }
+      }
+    } catch (fallbackErr) {
+      // Abaikan fallback error dan gunakan error dari result
+    }
+
     return {
       connected: false,
       spreadsheetName: 'Koneksi Gagal',
