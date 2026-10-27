@@ -393,6 +393,15 @@ export async function checkSyncStatus(): Promise<SyncStatus> {
 }
 
 /**
+ * Memicu penyusunan ulang format laporan cetak terkelompok (CETAK_PENGELUARAN) di Google Sheets
+ */
+export async function triggerGenerateCetakLaporan(
+  periode?: string
+): Promise<{ success: boolean; message?: string; error?: string; eventCount?: number; formattedTotal?: string }> {
+  return callGoogleAppsScript('generateCetakLaporan', { periode });
+}
+
+/**
  * Rekonsiliasi data dari CSV publik ke database lokal
  */
 export async function reconcileCsvData(parsed: CsvParsedResult): Promise<void> {
@@ -692,7 +701,7 @@ export function calculateSummary(
 /**
  * 1. Tambah Pengeluaran (Mendukung Batch Multi-item dari 1 acara & Idempotency Key)
  */
-export async function addPengeluaran(items: PengeluaranInput[]): Promise<{
+export async function addPengeluaran(items: PengeluaranInput[] | PengeluaranInput): Promise<{
   success: boolean;
   remoteConfirmed?: boolean;
   data?: PengeluaranItem[];
@@ -705,7 +714,8 @@ export async function addPengeluaran(items: PengeluaranInput[]): Promise<{
   const scriptUrl = getEffectiveScriptConfig().url;
   const isRemoteActive = Boolean(scriptUrl);
 
-  const preparedItems: PengeluaranItem[] = items.map((item, index) => {
+  const rawList = Array.isArray(items) ? items : [items];
+  const preparedItems: PengeluaranItem[] = rawList.map((item, index) => {
     const jumlah = Number(item.jumlah) || 1;
     const hargaSatuan = Number(item.hargaSatuan) || 0;
     const total = Number(item.total) || jumlah * hargaSatuan;

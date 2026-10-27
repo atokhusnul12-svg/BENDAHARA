@@ -41,7 +41,81 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Sheet 1: Rincian Pengeluaran
+    // Sheet 1: CETAK_PENGELUARAN (Format Vertikal Siap Cetak Dikelompokkan per Jenis Acara)
+    const cetakRows: (string | number)[][] = [
+      ['MAJELIS MUSYAWARAH & DIROSAH (MMD) PESANTREN'],
+      ['LAPORAN PENGELUARAN BENDAHARA MMD'],
+      [`Periode: ${summary.periodeLabel}   •   Dicetak: ${new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })} WIB`],
+      [],
+      ['No.', 'Jenis Acara / Rincian Belanja', 'Jumlah', 'Satuan', 'Harga Satuan (Rp)', 'Total (Rp)', 'Keterangan'],
+    ];
+
+    // Grouping berdasarkan jenis acara
+    const groups: { [key: string]: { name: string; kategori: string; items: typeof exportTransactions } } = {};
+    const groupOrder: string[] = [];
+
+    for (const it of exportTransactions) {
+      const raw = (it.jenisAcara || 'Kegiatan Umum').trim();
+      const key = raw.toLowerCase();
+      if (!groups[key]) {
+        groups[key] = { name: raw, kategori: it.kategoriNama || '', items: [] };
+        groupOrder.push(key);
+      }
+      groups[key].items.push(it);
+    }
+
+    let evtNum = 1;
+    let grandTotal = 0;
+
+    for (const key of groupOrder) {
+      const grp = groups[key];
+      cetakRows.push([evtNum, grp.name.toUpperCase(), '', '', '', '', grp.kategori ? `[${grp.kategori}]` : '']);
+      let evtSubtotal = 0;
+
+      for (let i = 0; i < grp.items.length; i++) {
+        const item = grp.items[i];
+        const isLast = (i === grp.items.length - 1);
+        const prefix = isLast ? '└  ' : '├  ';
+        const qty = Number(item.jumlah) || 1;
+        const price = Number(item.hargaSatuan) || 0;
+        const tot = Number(item.total) || (qty * price);
+        evtSubtotal += tot;
+
+        cetakRows.push([
+          '',
+          `   ${prefix}${item.namaBarang || '-'}`,
+          qty,
+          item.satuan || 'pcs',
+          price,
+          tot,
+          (item.tanggalTransaksi || '') + (item.catatan ? ` • ${item.catatan}` : '')
+        ]);
+      }
+
+      grandTotal += evtSubtotal;
+      cetakRows.push(['', `Subtotal ${grp.name}`, '', '', '', evtSubtotal, '']);
+      cetakRows.push([]); // Jeda baris kosong antar kelompok acara
+      evtNum++;
+    }
+
+    cetakRows.push(['', 'TOTAL PENGELUARAN KAS', '', '', '', grandTotal, '']);
+    cetakRows.push([]);
+    cetakRows.push(['', 'Total Subsidi Kas Masuk', '', '', '', summary.totalSubsidi, '']);
+    cetakRows.push(['', 'Total Realisasi Pengeluaran', '', '', '', grandTotal, '']);
+    cetakRows.push(['', 'Sisa Saldo Kas Tersedia', '', '', '', summary.saldoTersisa, '']);
+
+    const wsCetak = XLSX.utils.aoa_to_sheet(cetakRows);
+    wsCetak['!cols'] = [
+      { wch: 6 },   // No
+      { wch: 38 },  // Jenis Acara / Rincian Belanja
+      { wch: 10 },  // Jumlah
+      { wch: 12 },  // Satuan
+      { wch: 18 },  // Harga Satuan
+      { wch: 18 },  // Total
+      { wch: 26 },  // Keterangan
+    ];
+
+    // Sheet 2: Data Mentah Rincian Pengeluaran (Database Transaksi Datar)
     const rows = exportTransactions.map((item, idx) => ({
       No: idx + 1,
       ID: item.id,
@@ -57,7 +131,7 @@ export async function GET(request: NextRequest) {
       Catatan: item.catatan || '',
     }));
 
-    // Sheet 2: Ringkasan
+    // Sheet 3: Ringkasan Finansial
     const summaryRows = [
       { Parameter: 'Periode Laporan', Nilai: summary.periodeLabel },
       { Parameter: 'Total Subsidi Masuk (Rp)', Nilai: summary.totalSubsidi },
@@ -73,14 +147,16 @@ export async function GET(request: NextRequest) {
     const wsTrans = XLSX.utils.json_to_sheet(rows.length > 0 ? rows : [{ Pesan: 'Belum ada transaksi pada periode ini' }]);
     const wsSummary = XLSX.utils.json_to_sheet(summaryRows);
 
-    XLSX.utils.book_append_sheet(workbook, wsTrans, 'Pengeluaran');
-    XLSX.utils.book_append_sheet(workbook, wsSummary, 'Ringkasan');
+    // CETAK_PENGELUARAN diletakkan sebagai sheet pertama agar langsung tampil saat dibuka
+    XLSX.utils.book_append_sheet(workbook, wsCetak, 'CETAK_PENGELUARAN');
+    XLSX.utils.book_append_sheet(workbook, wsTrans, 'Data_Mentah_Pengeluaran');
+    XLSX.utils.book_append_sheet(workbook, wsSummary, 'Ringkasan_Kas');
 
     const cleanPeriodeName = (summary.periodeLabel || 'Semua_Periode').replace(/\s+/g, '_');
     const filename = `Laporan_Kas_MMD_${cleanPeriodeName}`;
 
     if (format === 'csv') {
-      const csv = XLSX.utils.sheet_to_csv(wsTrans);
+      const csv = XLSX.utils.sheet_to_csv(wsCetak);
       // Tambahkan UTF-8 BOM untuk kompatibilitas Excel
       const csvContent = '\uFEFF' + csv;
       return new NextResponse(csvContent, {

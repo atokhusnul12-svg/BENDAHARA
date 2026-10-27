@@ -103,6 +103,8 @@ export default function LaporanPage() {
     }
   };
 
+  const [syncingCetak, setSyncingCetak] = useState(false);
+
   const handleDownloadExcel = () => {
     const url = `/api/export?format=xlsx&periode=${encodeURIComponent(
       selectedPeriode
@@ -119,6 +121,29 @@ export default function LaporanPage() {
 
   const handlePrint = () => {
     window.print();
+  };
+
+  const handleSyncCetakSheets = async () => {
+    setSyncingCetak(true);
+    try {
+      const res = await fetch('/api/cetak-sheets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ periode: selectedPeriode }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        throw new Error(json.error || 'Gagal menyusun sheet cetak di Google Sheets.');
+      }
+      showToast(
+        'Laporan Cetak Disusun',
+        'Tab CETAK_PENGELUARAN di Google Sheets telah selesai disusun rapi per jenis acara.'
+      );
+    } catch (err: any) {
+      showToast('Gagal Memperbarui Sheet Cetak', err.message || 'Periksa koneksi Google Sheets.', 'error');
+    } finally {
+      setSyncingCetak(false);
+    }
   };
 
   return (
@@ -216,8 +241,21 @@ export default function LaporanPage() {
           </button>
 
           <button
+            onClick={handleSyncCetakSheets}
+            disabled={syncingCetak}
+            className="flex-1 sm:flex-initial h-9 px-3 rounded-xl bg-forest-50 hover:bg-forest-100 text-forest-800 text-xs font-semibold active:scale-95 transition-all border border-forest-200 flex items-center justify-center gap-1.5 shadow-2xs disabled:opacity-50"
+            type="button"
+            title="Perbarui tab CETAK_PENGELUARAN di Google Sheets"
+          >
+            <span className={`material-symbols-outlined text-[17px] text-forest-700 ${syncingCetak ? 'animate-spin' : ''}`}>
+              {syncingCetak ? 'progress_activity' : 'receipt_long'}
+            </span>
+            <span>{syncingCetak ? 'Menyusun...' : 'Sheet Cetak'}</span>
+          </button>
+
+          <button
             onClick={handleOpenGoogleSheets}
-            className="flex-1 sm:flex-initial h-9 px-3 rounded-xl bg-primary hover:bg-primary-container text-white text-xs font-semibold active:scale-95 transition-all flex items-center justify-center gap-1.5 shadow-xs"
+            className="flex-1 sm:flex-initial h-9 px-3 rounded-xl bg-forest-600 hover:bg-forest-700 text-white text-xs font-semibold active:scale-95 transition-all flex items-center justify-center gap-1.5 shadow-xs"
             type="button"
           >
             <span className="material-symbols-outlined text-[17px]">open_in_new</span>

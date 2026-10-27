@@ -20,6 +20,7 @@ export default function PengaturanPage() {
   } = useApp();
 
   const [testingSync, setTestingSync] = useState(false);
+  const [generatingCetak, setGeneratingCetak] = useState(false);
 
   // Modal Kategori State
   const [categoryModalOpen, setCategoryModalOpen] = useState(false);
@@ -100,6 +101,29 @@ export default function PengaturanPage() {
       showToast('Gagal memeriksa koneksi', e.message || 'Waktu koneksi habis.', 'error');
     } finally {
       setTestingSync(false);
+    }
+  };
+
+  const handleSyncCetakLaporan = async () => {
+    setGeneratingCetak(true);
+    try {
+      const res = await fetch('/api/cetak-sheets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ periode: selectedPeriode }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        throw new Error(json.error || 'Gagal memperbarui sheet cetak.');
+      }
+      showToast(
+        'Sheet Cetak Berhasil Disusun',
+        'Tab "CETAK_PENGELUARAN" di Google Sheets telah selesai disusun rapi per kelompok jenis acara.'
+      );
+    } catch (err: any) {
+      showToast('Gagal Memperbarui Sheet Cetak', err.message || 'Periksa koneksi Google Sheets.', 'error');
+    } finally {
+      setGeneratingCetak(false);
     }
   };
 
@@ -406,6 +430,20 @@ export default function PengaturanPage() {
                   <span>Panduan Setup</span>
                 </button>
               </div>
+
+              {/* Tombol Perbarui Sheet Cetak (CETAK_PENGELUARAN) */}
+              <button
+                onClick={handleSyncCetakLaporan}
+                disabled={generatingCetak}
+                className="w-full h-11 rounded-xl bg-forest-50 hover:bg-forest-100 text-forest-800 border border-forest-200 text-xs font-semibold flex items-center justify-center gap-2 active:scale-95 transition-all disabled:opacity-50"
+                type="button"
+                title="Menyusun ulang format kelompok jenis acara siap cetak di Google Sheets"
+              >
+                <span className={`material-symbols-outlined text-[18px] text-forest-700 ${generatingCetak ? 'animate-spin' : ''}`}>
+                  {generatingCetak ? 'progress_activity' : 'receipt_long'}
+                </span>
+                <span>{generatingCetak ? 'Menyusun Format Cetak di Google Sheets...' : 'Perbarui Sheet Cetak (CETAK_PENGELUARAN)'}</span>
+              </button>
             </div>
           </section>
 

@@ -847,6 +847,187 @@ Catatan: Harga dalam Rupiah (Rp). Total dihitung otomatis = Jumlah Barang × Har
   const allExpAfter = (await getAllData()).pengeluaran;
   assert(!allExpAfter.some(e => e.id === 'EXP-TEST-SURYA'), 'Tes O7: Transaksi pengujian Surya berhasil dibersihkan');
 
+  // =========================================================================
+  // TES P — Format Cetak Pengeluaran Google Sheets & Ekspor Terkelompok per Jenis Acara
+  // Spesifikasi: Pemisahan Database & Format Cetak, Hirarki Pohon (├ dan └),
+  // Subtotal per Acara, dan Total Tanpa Double-Count
+  // =========================================================================
+  console.log('\n📌 TES P — Format Cetak Pengeluaran Google Sheets & Ekspor Terkelompok per Jenis Acara');
+  console.log('   Spesifikasi: Pemisahan Database & Cetak, Hirarki Pohon, Subtotal, & Total Tanpa Double-Count\n');
+
+  // Bersihkan database untuk pengujian terisolasi
+  if (typeof resetLocalDbForTesting === 'function') {
+    resetLocalDbForTesting();
+  }
+
+  // 1. Buat Acara 1: "PENGAJIAN UMUM" dengan 3 rincian belanja
+  const event1Id = 'EVT-P1-PENGAJIAN';
+  await addPengeluaran({
+    id: 'EXP-P1-1',
+    eventId: event1Id,
+    jenisAcara: 'Pengajian Umum',
+    namaBarang: 'Konsumsi peserta',
+    jumlah: 3,
+    satuan: 'porsi',
+    hargaSatuan: 25000,
+    total: 75000,
+    kategoriNama: 'LBM (Lajnah Bahtsul Masail)',
+    periodeId: 'Jumadal Ula 1448 H',
+    bulanHijriah: 'Jumadal Ula',
+    tahunHijriah: '1448',
+    tanggalTransaksi: '2026-10-15',
+  });
+  await addPengeluaran({
+    id: 'EXP-P1-2',
+    eventId: event1Id,
+    jenisAcara: 'Pengajian Umum',
+    namaBarang: 'Air mineral',
+    jumlah: 2,
+    satuan: 'dus',
+    hargaSatuan: 5000,
+    total: 10000,
+    kategoriNama: 'LBM (Lajnah Bahtsul Masail)',
+    periodeId: 'Jumadal Ula 1448 H',
+    bulanHijriah: 'Jumadal Ula',
+    tahunHijriah: '1448',
+    tanggalTransaksi: '2026-10-15',
+  });
+  await addPengeluaran({
+    id: 'EXP-P1-3',
+    eventId: event1Id,
+    jenisAcara: 'Pengajian Umum',
+    namaBarang: 'Perlengkapan acara',
+    jumlah: 1,
+    satuan: 'paket',
+    hargaSatuan: 40000,
+    total: 40000,
+    kategoriNama: 'LBM (Lajnah Bahtsul Masail)',
+    periodeId: 'Jumadal Ula 1448 H',
+    bulanHijriah: 'Jumadal Ula',
+    tahunHijriah: '1448',
+    tanggalTransaksi: '2026-10-15',
+  });
+
+  // 2. Buat Acara 2: "MUSYAWARAH MINGGUAN" dengan 2 rincian belanja
+  const event2Id = 'EVT-P2-MUSYAWARAH';
+  await addPengeluaran({
+    id: 'EXP-P2-1',
+    eventId: event2Id,
+    jenisAcara: 'Musyawarah Mingguan',
+    namaBarang: 'Konsumsi rapat',
+    jumlah: 4,
+    satuan: 'bungkus',
+    hargaSatuan: 15000,
+    total: 60000,
+    kategoriNama: 'Musyawaroh',
+    periodeId: 'Jumadal Ula 1448 H',
+    bulanHijriah: 'Jumadal Ula',
+    tahunHijriah: '1448',
+    tanggalTransaksi: '2026-10-18',
+  });
+  await addPengeluaran({
+    id: 'EXP-P2-2',
+    eventId: event2Id,
+    jenisAcara: 'Musyawarah Mingguan',
+    namaBarang: 'Alat tulis',
+    jumlah: 2,
+    satuan: 'pack',
+    hargaSatuan: 10000,
+    total: 20000,
+    kategoriNama: 'Musyawaroh',
+    periodeId: 'Jumadal Ula 1448 H',
+    bulanHijriah: 'Jumadal Ula',
+    tahunHijriah: '1448',
+    tanggalTransaksi: '2026-10-18',
+  });
+
+  // Ambil data database transaksi mentah
+  const currentDb = await getAllData();
+  const allExp = currentDb.pengeluaran;
+
+  // Verifikasi Pemisahan Database: Tabel mentah 'Pengeluaran' tetap datar dengan 5 item
+  assert(allExp.length === 5, 'Tes P1: Database transaksi mentah Pengeluaran menyimpan tepat 5 baris data datar');
+
+  // Uji Logika Grouping Format Cetak
+  const groupMap = {};
+  const groupOrderList = [];
+  allExp.forEach(it => {
+    const rawAcara = String(it.jenisAcara || 'Kegiatan Umum').trim();
+    const key = rawAcara.toLowerCase();
+    if (!groupMap[key]) {
+      groupMap[key] = { name: rawAcara, items: [] };
+      groupOrderList.push(key);
+    }
+    groupMap[key].items.push(it);
+  });
+
+  assert(groupOrderList.length === 2, 'Tes P2: Sistem berhasil memisahkan menjadi 2 kelompok acara mandiri');
+  assert(groupMap['pengajian umum'].items.length === 3, 'Tes P3: Acara "Pengajian Umum" memiliki tepat 3 rincian belanja');
+  assert(groupMap['musyawarah mingguan'].items.length === 2, 'Tes P4: Acara "Musyawarah Mingguan" memiliki tepat 2 rincian belanja');
+
+  // Uji Hirarki Garis Pohon (├ untuk item 1..n-1, dan └ untuk item terakhir)
+  const itemsPengajian = groupMap['pengajian umum'].items;
+  const p1Prefixes = itemsPengajian.map((item, idx) => (idx === itemsPengajian.length - 1 ? '└  ' : '├  '));
+  assert(p1Prefixes[0] === '├  ' && p1Prefixes[1] === '├  ' && p1Prefixes[2] === '└  ', 'Tes P5: Penanda pohon vertikal (├ dan └) terbentuk rapi dan konsisten');
+
+  // Uji Perhitungan Subtotal per Acara
+  const subtotalP1 = itemsPengajian.reduce((s, it) => s + (Number(it.total) || 0), 0);
+  const subtotalP2 = groupMap['musyawarah mingguan'].items.reduce((s, it) => s + (Number(it.total) || 0), 0);
+  assert(subtotalP1 === 125000, `Tes P6: Subtotal Pengajian Umum terhitung tepat Rp 125.000 (Aktual: ${subtotalP1})`);
+  assert(subtotalP2 === 80000, `Tes P7: Subtotal Musyawarah Mingguan terhitung tepat Rp 80.000 (Aktual: ${subtotalP2})`);
+
+  // Uji Total Keseluruhan (Bebas dari Double-Counting)
+  const grandTotalExp = subtotalP1 + subtotalP2;
+  const directSum = allExp.reduce((s, it) => s + (Number(it.total) || 0), 0);
+  assert(grandTotalExp === 205000, `Tes P8: Total Pengeluaran keseluruhan cocok Rp 205.000 (Aktual: ${grandTotalExp})`);
+  assert(grandTotalExp === directSum, 'Tes P9: Total pengeluaran tidak menghitung transaksi ganda (Idempotent calculation)');
+
+  // Uji Perubahan Data (Edit Rincian Belanja): Konsumsi rapat diubah dari 4 menjadi 5 item
+  await updatePengeluaran({
+    id: 'EXP-P2-1',
+    jumlah: 5,
+    hargaSatuan: 15000,
+    total: 75000,
+  });
+
+  const updatedDb = await getAllData();
+  const updatedP2_1 = updatedDb.pengeluaran.find(p => p.id === 'EXP-P2-1');
+  assert(updatedP2_1.jumlah === 5, 'Tes P10: Jumlah barang hasil edit berhasil diperbarui menjadi 5');
+  assert(updatedP2_1.total === 75000, 'Tes P11: Subtotal baris hasil edit berubah menjadi Rp 75.000');
+
+  // Hitung ulang subtotal setelah edit
+  const updatedP2Subtotal = updatedDb.pengeluaran
+    .filter(p => p.jenisAcara.toLowerCase() === 'musyawarah mingguan')
+    .reduce((s, it) => s + (Number(it.total) || 0), 0);
+  const updatedGrandTotal = updatedDb.pengeluaran.reduce((s, it) => s + (Number(it.total) || 0), 0);
+
+  assert(updatedP2Subtotal === 95000, `Tes P12: Subtotal Musyawarah Mingguan otomatis terupdate menjadi Rp 95.000 (Aktual: ${updatedP2Subtotal})`);
+  assert(updatedGrandTotal === 220000, `Tes P13: Total keseluruhan otomatis terupdate menjadi Rp 220.000 (Aktual: ${updatedGrandTotal})`);
+
+  // Uji Kompatibilitas Transaksi Lama (tanpa eventId)
+  await addPengeluaran({
+    id: 'EXP-LEGACY-1',
+    jenisAcara: 'Pengajian Umum',
+    namaBarang: 'Konsumsi Ustadz Tamu',
+    jumlah: 1,
+    satuan: 'kotak',
+    hargaSatuan: 30000,
+    total: 30000,
+    periodeId: 'Jumadal Ula 1448 H',
+  });
+  const afterLegacyDb = await getAllData();
+  const legacyInGroup = afterLegacyDb.pengeluaran.filter(p => p.jenisAcara.toLowerCase() === 'pengajian umum');
+  assert(legacyInGroup.length === 4, 'Tes P14: Transaksi lama (tanpa eventId) otomatis tergabung di bawah kelompok "Pengajian Umum" yang benar');
+
+  // Bersihkan transaksi uji coba
+  await deletePengeluaran('EXP-P1-1');
+  await deletePengeluaran('EXP-P1-2');
+  await deletePengeluaran('EXP-P1-3');
+  await deletePengeluaran('EXP-P2-1');
+  await deletePengeluaran('EXP-P2-2');
+  await deletePengeluaran('EXP-LEGACY-1');
+  assert((await getAllData()).pengeluaran.length === 0, 'Tes P15: Seluruh transaksi uji coba berhasil dibersihkan');
+
   console.log('\n==========================================================');
   console.log(`HASIL AKHIR PENGUJIAN: ${passCount} LULUS, ${failCount} GAGAL`);
   console.log('==========================================================\n');

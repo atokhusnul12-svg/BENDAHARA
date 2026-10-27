@@ -45,6 +45,33 @@ const HEADERS = {
  * - SPREADSHEET_ID: ID Google Sheets kas tujuan (opsional jika skrip dipasang langsung di file spreadsheet kas)
  */
 /**
+ * MENU GOOGLE SHEETS & PEMBARUAN OTOMATIS
+ * Menambahkan menu kustom 'Bendahara MMD' di toolbar atas Google Sheets
+ */
+function onOpen() {
+  try {
+    SpreadsheetApp.getUi()
+      .createMenu('Bendahara MMD')
+      .addItem('📄 Perbarui Sheet Cetak (CETAK_PENGELUARAN)', 'menuUpdateCetakLaporan')
+      .addSeparator()
+      .addItem('🔑 Setel Token Otomatis (MMD2026)', 'aturTokenOtomatis')
+      .addToUi();
+  } catch (e) {}
+}
+
+function menuUpdateCetakLaporan() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const res = renderCetakPengeluaran(ss);
+  try {
+    if (res.success) {
+      SpreadsheetApp.getUi().alert('Laporan Siap Cetak Sukses Diperbarui', 'Tab "CETAK_PENGELUARAN" telah selesai disusun ulang.\n\n• Jumlah Acara: ' + res.eventCount + '\n• Jumlah Item Belanja: ' + res.itemCount + '\n• Total Pengeluaran: ' + res.formattedTotal, SpreadsheetApp.getUi().ButtonSet.OK);
+    } else {
+      SpreadsheetApp.getUi().alert('Informasi Laporan', res.message || 'Tidak ada data pengeluaran.', SpreadsheetApp.getUi().ButtonSet.OK);
+    }
+  } catch (e) {}
+}
+
+/**
  * FUNGSI BANTUAN 1-KLIK: Setel Token Otomatis
  * Jika Anda belum berhasil menyetel Script Properties di menu Setelan Proyek:
  * 1. Di toolbar atas Apps Script, pilih fungsi "aturTokenOtomatis"
@@ -210,6 +237,9 @@ function doPost(e) {
         break;
       case 'deleteKategori':
         result = handleDeleteKategori(ss, payload.id);
+        break;
+      case 'generateCetakLaporan':
+        result = handleGenerateCetakLaporan(ss, payload.periode);
         break;
       default:
         result = { success: false, error: 'Aksi "' + action + '" tidak dikenali.' };
@@ -435,6 +465,13 @@ function handleCreatePengeluaran(ss, data) {
     if (cache) cache.removeAll(['all_data', 'subsidi_data', 'pengeluaran_data', 'data']);
   } catch (e) {}
 
+  // Otomatis perbarui sheet cetak terkelompok (CETAK_PENGELUARAN)
+  try {
+    renderCetakPengeluaran(ss);
+  } catch (errCetak) {
+    Logger.log('Peringatan: Gagal memperbarui CETAK_PENGELUARAN: ' + errCetak.message);
+  }
+
   return { success: true, count: inserted.length, data: inserted };
 }
 
@@ -491,6 +528,13 @@ function handleUpdatePengeluaran(ss, item) {
         if (cache) cache.removeAll(['all_data', 'subsidi_data', 'pengeluaran_data', 'data']);
       } catch (e) {}
 
+      // Otomatis perbarui sheet cetak terkelompok (CETAK_PENGELUARAN)
+      try {
+        renderCetakPengeluaran(ss);
+      } catch (errCetak) {
+        Logger.log('Peringatan: Gagal memperbarui CETAK_PENGELUARAN: ' + errCetak.message);
+      }
+
       return { success: true, id: id, updated: updated };
     }
   }
@@ -545,7 +589,12 @@ function deleteRowById(ss, sheetName, id) {
 function handleDeletePengeluaran(ss, id, payload) {
   // 1. Coba hapus berdasarkan ID unik di sheet 'Pengeluaran'
   const res = deleteRowById(ss, 'Pengeluaran', id);
-  if (res.success) return res;
+  if (res.success) {
+    try {
+      renderCetakPengeluaran(ss);
+    } catch (errCetak) {}
+    return res;
+  }
 
   // 2. Jika ID adalah item CSV publik (misal EXP-CSV-...) atau tidak tercatat di sheet master:
   // Cari di seluruh sheet lain (seperti LBM) apakah terdapat baris yang sesuai untuk dihapus fisiknya
@@ -903,3 +952,348 @@ function handleUpdateKategori(ss, item) {
 function handleDeleteKategori(ss, id) {
   return deleteRowById(ss, 'Kategori', id);
 }
+
+/**
+ * =========================================================================
+ * CETAK_PENGELUARAN: FORMAT LAPORAN KELOMPOK JENIS ACARA SIAP CETAK
+ * =========================================================================
+ * 
+ * Aturan Desain & Rekonsiliasi:
+ * 1. Tidak mengubah skema sheet 'Pengeluaran' (database transaksi tetap utuh).
+ * 2. Mengelompokkan transaksi secara vertikal berdasarkan 'jenisAcara'.
+ * 3. Setiap rincian belanja muncul di bawah jenis acara dengan pohon (├ dan └).
+ * 4. Subtotal per acara dihitung otomatis dengan formula dinamis =SUM().
+ * 5. Total pengeluaran keseluruhan dihitung tanpa risiko double-counting.
+ * 6. Format Rupiah ("Rp"#,##0) dan ukuran kolom dioptimalkan untuk cetak A4.
+ * 7. Baris header 1-6 di-freeze agar mengulang saat dicetak.
+ */
+
+function handleGenerateCetakLaporan(ss, targetPeriode) {
+  return renderCetakPengeluaran(ss, targetPeriode);
+}
+
+function renderCetakPengeluaran(ss, targetPeriode) {
+  if (!ss) return { success: false, error: 'Spreadsheet tidak ditemukan.' };
+
+  var cetakSheet = ss.getSheetByName('CETAK_PENGELUARAN');
+  if (!cetakSheet) {
+    cetakSheet = ss.insertSheet('CETAK_PENGELUARAN');
+  }
+
+  // Set warna tab dark forest green agar mudah dikenali oleh bendahara
+  try {
+    cetakSheet.setTabColor('#10382D');
+  } catch (e) {}
+
+  // Bersihkan format dan konten lama
+  cetakSheet.clear();
+  cetakSheet.setHideGridlines(false);
+
+  // Ambil semua transaksi pengeluaran mentah
+  var allExpenses = getSheetObjects(ss, 'Pengeluaran');
+  var allPeriods = getSheetObjects(ss, 'Periode');
+  var allSubsidies = getSheetObjects(ss, 'Subsidi');
+
+  // Tentukan periode aktif/target
+  var activePeriodLabel = '';
+  if (targetPeriode && typeof targetPeriode === 'string' && targetPeriode.trim() && targetPeriode.trim() !== 'Semua' && targetPeriode.trim() !== 'Semua Periode') {
+    activePeriodLabel = targetPeriode.trim();
+  } else {
+    // Cari periode yang berstatus aktif
+    for (var p = 0; p < allPeriods.length; p++) {
+      if (allPeriods[p].statusAktif === true || String(allPeriods[p].statusAktif).toLowerCase() === 'true') {
+        activePeriodLabel = allPeriods[p].labelPeriode || (allPeriods[p].namaBulanHijriah + ' ' + allPeriods[p].tahunHijriah + ' H');
+        break;
+      }
+    }
+    // Jika tidak ada, ambil dari transaksi terakhir
+    if (!activePeriodLabel && allExpenses.length > 0) {
+      var last = allExpenses[allExpenses.length - 1];
+      activePeriodLabel = (last.bulanHijriah ? last.bulanHijriah + ' ' + last.tahunHijriah + ' H' : last.periodeId) || 'Jumadal Ula 1448 H';
+    }
+    if (!activePeriodLabel) {
+      activePeriodLabel = 'Periode Aktif 1448 H';
+    }
+  }
+
+  // Filter transaksi berdasarkan periode target
+  var filtered = allExpenses.filter(function(item) {
+    if (!activePeriodLabel || activePeriodLabel === 'Semua' || activePeriodLabel === 'Semua Periode') return true;
+    var label = ((item.bulanHijriah || '') + ' ' + (item.tahunHijriah || '') + ' H').trim().toLowerCase();
+    var target = activePeriodLabel.trim().toLowerCase();
+    return label === target || String(item.periodeId || '').trim().toLowerCase() === target;
+  });
+
+  // Filter subsidi untuk periode ini guna rekapitulasi kas
+  var totalSubsidiPeriode = 0;
+  allSubsidies.forEach(function(sub) {
+    var label = ((sub.bulanHijriah || '') + ' ' + (sub.tahunHijriah || '') + ' H').trim().toLowerCase();
+    var target = activePeriodLabel.trim().toLowerCase();
+    if (activePeriodLabel === 'Semua' || label === target || String(sub.periodeId || '').trim().toLowerCase() === target) {
+      totalSubsidiPeriode += Number(sub.nominal) || 0;
+    }
+  });
+
+  var now = new Date();
+  var dateStr = Utilities.formatDate(now, 'Asia/Jakarta', 'dd MMMM yyyy, HH:mm') + ' WIB';
+
+  // JIKA DATA KOSONG
+  if (filtered.length === 0) {
+    cetakSheet.getRange('A2:G2').merge()
+      .setValue('MAJELIS MUSYAWARAH & DIROSAH (MMD) PESANTREN')
+      .setFontWeight('bold').setFontSize(10).setFontColor('#556B60').setHorizontalAlignment('center');
+    cetakSheet.getRange('A3:G3').merge()
+      .setValue('LAPORAN PENGELUARAN KAS BENDAHARA')
+      .setFontWeight('bold').setFontSize(15).setFontColor('#10382D').setHorizontalAlignment('center');
+    cetakSheet.getRange('A4:G4').merge()
+      .setValue('Periode: ' + activePeriodLabel + ' • Dicetak: ' + dateStr)
+      .setFontStyle('italic').setFontSize(9.5).setFontColor('#4A5568').setHorizontalAlignment('center');
+    
+    cetakSheet.getRange('A6:G6').merge()
+      .setValue('Belum ada catatan transaksi pengeluaran untuk periode ' + activePeriodLabel)
+      .setFontStyle('italic').setFontColor('#718096').setHorizontalAlignment('center');
+    
+    setPrintColumnWidths(cetakSheet);
+    return { success: true, message: 'Sheet CETAK_PENGELUARAN diperbarui (Belum ada data).', count: 0 };
+  }
+
+  // GROUPING BERDASARKAN JENIS ACARA
+  var groups = {};
+  var groupOrder = [];
+
+  filtered.forEach(function(it) {
+    var rawAcara = String(it.jenisAcara || 'Kegiatan Umum').trim();
+    var key = rawAcara.toLowerCase();
+    if (!groups[key]) {
+      groups[key] = {
+        displayName: rawAcara,
+        kategoriNama: it.kategoriNama || '',
+        items: []
+      };
+      groupOrder.push(key);
+    }
+    groups[key].items.push(it);
+  });
+
+  // Tulis Header Judul Dokumen Laporan
+  cetakSheet.getRange('A2:G2').merge()
+    .setValue('MAJELIS MUSYAWARAH & DIROSAH (MMD) PESANTREN')
+    .setFontWeight('bold')
+    .setFontSize(10)
+    .setFontColor('#556B60')
+    .setHorizontalAlignment('center');
+
+  cetakSheet.getRange('A3:G3').merge()
+    .setValue('LAPORAN PENGELUARAN BENDAHARA MMD')
+    .setFontWeight('bold')
+    .setFontSize(15)
+    .setFontColor('#10382D')
+    .setHorizontalAlignment('center');
+
+  cetakSheet.getRange('A4:G4').merge()
+    .setValue('Periode: ' + activePeriodLabel + '   •   Dicetak: ' + dateStr)
+    .setFontStyle('italic')
+    .setFontSize(9.5)
+    .setFontColor('#4A5568')
+    .setHorizontalAlignment('center');
+
+  // Baris Header Tabel (Row 6)
+  var headerValues = [
+    ['No.', 'Jenis Acara / Rincian Belanja', 'Jumlah', 'Satuan', 'Harga Satuan', 'Total', 'Keterangan']
+  ];
+  var headerRange = cetakSheet.getRange(6, 1, 1, 7);
+  headerRange.setValues(headerValues)
+    .setBackground('#10382D')
+    .setFontColor('#FFFFFF')
+    .setFontWeight('bold')
+    .setFontSize(10)
+    .setVerticalAlignment('middle');
+  cetakSheet.setRowHeight(6, 28);
+  cetakSheet.getRange(6, 1).setHorizontalAlignment('center');
+  cetakSheet.getRange(6, 2).setHorizontalAlignment('left');
+  cetakSheet.getRange(6, 3).setHorizontalAlignment('center');
+  cetakSheet.getRange(6, 4).setHorizontalAlignment('center');
+  cetakSheet.getRange(6, 5).setHorizontalAlignment('right');
+  cetakSheet.getRange(6, 6).setHorizontalAlignment('right');
+  cetakSheet.getRange(6, 7).setHorizontalAlignment('center');
+
+  var currentRow = 7;
+  var eventNumber = 1;
+  var subtotalRowIndexes = [];
+  var totalExpenseSum = 0;
+
+  groupOrder.forEach(function(key) {
+    var group = groups[key];
+    var eventName = group.displayName;
+    var items = group.items;
+
+    // 1. Baris Judul Jenis Acara (Kelompok Utama)
+    cetakSheet.getRange(currentRow, 1, 1, 7).setBackground('#EBF3EF');
+    cetakSheet.getRange(currentRow, 1).setValue(eventNumber).setHorizontalAlignment('center').setFontWeight('bold').setFontColor('#10382D');
+    cetakSheet.getRange(currentRow, 2).setValue(eventName.toUpperCase()).setFontWeight('bold').setFontSize(10.5).setFontColor('#10382D');
+    if (group.kategoriNama) {
+      cetakSheet.getRange(currentRow, 7).setValue('[' + group.kategoriNama + ']').setFontStyle('italic').setFontSize(8.5).setFontColor('#556B60').setHorizontalAlignment('center');
+    }
+    cetakSheet.getRange(currentRow, 1, 1, 7).setBorder(true, false, true, false, false, false, '#CBD5E0', SpreadsheetApp.BorderStyle.SOLID);
+    cetakSheet.setRowHeight(currentRow, 24);
+    currentRow++;
+
+    // 2. Baris Rincian Belanja
+    var startItemRow = currentRow;
+    for (var i = 0; i < items.length; i++) {
+      var item = items[i];
+      var isLast = (i === items.length - 1);
+      var branch = isLast ? '└ ' : '├ ';
+      var qty = Number(item.jumlah) || 1;
+      var price = Number(item.hargaSatuan) || 0;
+      var total = Number(item.total) || (qty * price);
+      totalExpenseSum += total;
+
+      var rowValues = [
+        '',
+        '   ' + branch + (item.namaBarang || '-'),
+        qty,
+        item.satuan || 'pcs',
+        price,
+        total,
+        (item.tanggalTransaksi || '') + (item.catatan ? ' (' + item.catatan + ')' : '')
+      ];
+
+      cetakSheet.getRange(currentRow, 1, 1, 7).setValues([rowValues]);
+      cetakSheet.setRowHeight(currentRow, 20);
+
+      // Alignment & Styling
+      cetakSheet.getRange(currentRow, 2).setFontSize(9.5).setFontColor('#1A202C');
+      cetakSheet.getRange(currentRow, 3).setHorizontalAlignment('center').setFontSize(9.5).setNumberFormat('#,##0');
+      cetakSheet.getRange(currentRow, 4).setHorizontalAlignment('center').setFontSize(9).setFontColor('#556B60');
+      cetakSheet.getRange(currentRow, 5).setHorizontalAlignment('right').setFontSize(9.5).setNumberFormat('"Rp"#,##0');
+      cetakSheet.getRange(currentRow, 6).setHorizontalAlignment('right').setFontSize(9.5).setFontWeight('bold').setNumberFormat('"Rp"#,##0');
+      cetakSheet.getRange(currentRow, 7).setFontSize(8.5).setFontColor('#718096');
+
+      currentRow++;
+    }
+    var endItemRow = currentRow - 1;
+
+    // 3. Baris Subtotal per Acara
+    cetakSheet.getRange(currentRow, 1, 1, 7).setBackground('#F8FAF9');
+    cetakSheet.getRange(currentRow, 2).setValue('Subtotal ' + eventName)
+      .setHorizontalAlignment('right').setFontWeight('bold').setFontStyle('italic').setFontSize(9.5).setFontColor('#10382D');
+    
+    // Formula SUM dinamis untuk subtotal acara
+    cetakSheet.getRange(currentRow, 6)
+      .setFormula('=SUM(F' + startItemRow + ':F' + endItemRow + ')')
+      .setHorizontalAlignment('right').setFontWeight('bold').setFontSize(10).setFontColor('#10382D').setNumberFormat('"Rp"#,##0');
+    
+    cetakSheet.getRange(currentRow, 1, 1, 7).setBorder(true, false, true, false, false, false, '#CBD5E0', SpreadsheetApp.BorderStyle.SOLID);
+    cetakSheet.setRowHeight(currentRow, 22);
+
+    subtotalRowIndexes.push(currentRow);
+    currentRow++;
+
+    // 4. Jeda baris kosong antar kelompok acara
+    cetakSheet.setRowHeight(currentRow, 12);
+    currentRow++;
+
+    eventNumber++;
+  });
+
+  // BARIS TOTAL PENGELUARAN KESELURUHAN (Prominen & Tebal)
+  var totalRow = currentRow;
+  cetakSheet.getRange(totalRow, 1, 1, 5).merge()
+    .setValue('TOTAL PENGELUARAN KAS')
+    .setBackground('#10382D')
+    .setFontColor('#FFFFFF')
+    .setFontWeight('bold')
+    .setFontSize(11)
+    .setHorizontalAlignment('right')
+    .setVerticalAlignment('middle');
+
+  var sumFormula = subtotalRowIndexes.length > 0
+    ? '=SUM(' + subtotalRowIndexes.map(function(idx) { return 'F' + idx; }).join(',') + ')'
+    : '=SUM(F7:F' + (totalRow - 1) + ')';
+
+  cetakSheet.getRange(totalRow, 6)
+    .setFormula(sumFormula)
+    .setBackground('#10382D')
+    .setFontColor('#FFFFFF')
+    .setFontWeight('bold')
+    .setFontSize(11)
+    .setHorizontalAlignment('right')
+    .setVerticalAlignment('middle')
+    .setNumberFormat('"Rp"#,##0');
+
+  cetakSheet.getRange(totalRow, 7).setBackground('#10382D');
+  cetakSheet.setRowHeight(totalRow, 30);
+  currentRow++;
+
+  // REKAPITULASI DANA KAS (Subsidi Masuk, Pengeluaran, Saldo Sisa)
+  currentRow++;
+  var recapStartRow = currentRow;
+  
+  // Total Subsidi Masuk
+  cetakSheet.getRange(recapStartRow, 2, 1, 4).merge()
+    .setValue('Total Subsidi Kas Masuk')
+    .setFontWeight('bold').setFontSize(10).setFontColor('#10382D').setHorizontalAlignment('right');
+  cetakSheet.getRange(recapStartRow, 6)
+    .setValue(totalSubsidiPeriode)
+    .setFontWeight('bold').setFontSize(10).setFontColor('#10382D').setHorizontalAlignment('right').setNumberFormat('"Rp"#,##0');
+  
+  // Realisasi Pengeluaran
+  cetakSheet.getRange(recapStartRow + 1, 2, 1, 4).merge()
+    .setValue('Total Realisasi Pengeluaran')
+    .setFontWeight('bold').setFontSize(10).setFontColor('#C53030').setHorizontalAlignment('right');
+  cetakSheet.getRange(recapStartRow + 1, 6)
+    .setFormula('=F' + totalRow)
+    .setFontWeight('bold').setFontSize(10).setFontColor('#C53030').setHorizontalAlignment('right').setNumberFormat('"Rp"#,##0');
+
+  // Sisa Saldo Kas
+  cetakSheet.getRange(recapStartRow + 2, 2, 1, 4).merge()
+    .setValue('Sisa Saldo Kas Tersedia')
+    .setFontWeight('bold').setFontSize(11).setFontColor('#10382D').setHorizontalAlignment('right');
+  cetakSheet.getRange(recapStartRow + 2, 6)
+    .setFormula('=F' + recapStartRow + '-F' + (recapStartRow + 1))
+    .setFontWeight('bold').setFontSize(11).setFontColor('#10382D').setHorizontalAlignment('right').setNumberFormat('"Rp"#,##0');
+  cetakSheet.getRange(recapStartRow + 2, 2, 1, 5)
+    .setBackground('#EBF3EF')
+    .setBorder(true, false, true, false, false, false, '#10382D', SpreadsheetApp.BorderStyle.DOUBLE);
+
+  currentRow += 4;
+
+  // TANDA TANGAN PENGESAHAN (Print-Ready Signature Block)
+  var sigRow = currentRow;
+  cetakSheet.getRange(sigRow, 2).setValue('Mengetahui,\nKetua Majelis MMD\n\n\n\n\n( _________________________ )')
+    .setHorizontalAlignment('center').setFontSize(9.5).setFontColor('#2D3748');
+
+  cetakSheet.getRange(sigRow, 6).setValue('Kediri, ' + Utilities.formatDate(now, 'Asia/Jakarta', 'dd MMMM yyyy') + '\nBendahara MMD\n\n\n\n\n( _________________________ )')
+    .setHorizontalAlignment('center').setFontSize(9.5).setFontColor('#2D3748');
+
+  // PENGATURAN LEBAR KOLOM & PRINT FREEZE
+  setPrintColumnWidths(cetakSheet);
+  cetakSheet.setFrozenRows(6);
+
+  SpreadsheetApp.flush();
+
+  return {
+    success: true,
+    message: 'Sheet CETAK_PENGELUARAN berhasil diperbarui.',
+    eventCount: groupOrder.length,
+    itemCount: filtered.length,
+    formattedTotal: 'Rp ' + totalExpenseSum.toLocaleString('id-ID')
+  };
+}
+
+/**
+ * Atur lebar kolom optimal untuk cetak kertas A4
+ */
+function setPrintColumnWidths(sheet) {
+  try {
+    sheet.setColumnWidth(1, 40);   // Col A: No.
+    sheet.setColumnWidth(2, 260);  // Col B: Jenis Acara / Rincian Belanja
+    sheet.setColumnWidth(3, 55);   // Col C: Jumlah
+    sheet.setColumnWidth(4, 65);   // Col D: Satuan
+    sheet.setColumnWidth(5, 110);  // Col E: Harga Satuan
+    sheet.setColumnWidth(6, 120);  // Col F: Total
+    sheet.setColumnWidth(7, 140);  // Col G: Keterangan
+  } catch (e) {}
+}
+
