@@ -19,6 +19,18 @@ export default function HomePage() {
   } = useApp();
 
   const [periodDropdownOpen, setPeriodDropdownOpen] = useState(false);
+  const dropdownRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    if (!periodDropdownOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setPeriodDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [periodDropdownOpen]);
 
   // Filter transaksi terbaru untuk periode aktif (maksimal 5 transaksi)
   const currentPeriodExpenses = pengeluaran
@@ -41,8 +53,9 @@ export default function HomePage() {
       <div className="flex flex-col gap-space-sm mb-space-md pt-2">
         <div className="flex items-center justify-between gap-space-sm">
           {/* Periode Dropdown Trigger */}
-          <div className="relative">
+          <div className="relative" ref={dropdownRef}>
             <button
+
               className="flex items-center gap-space-xs px-3.5 py-2 min-h-[42px] bg-surface-container-lowest rounded-full shadow-sm hover:bg-surface-container-low transition-colors text-on-surface border border-surface-container active:scale-[0.98]"
               onClick={() => setPeriodDropdownOpen(!periodDropdownOpen)}
               type="button"
