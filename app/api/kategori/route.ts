@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { addKategori, deleteKategori, updateKategori } from '@/lib/data-service';
+import { verifyAdminRequest } from '@/lib/auth';
 
 export async function POST(request: NextRequest) {
   try {
+    if (!verifyAdminRequest(request)) {
+      return NextResponse.json({ success: false, error: 'Akses ditolak: Diperlukan autentikasi PIN Bendahara.' }, { status: 401 });
+    }
+
     const body = await request.json();
     if (!body.namaKategori || !body.namaKategori.trim()) {
       return NextResponse.json({ success: false, error: 'Nama kategori tidak boleh kosong.' }, { status: 400 });
@@ -28,6 +33,10 @@ export async function POST(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
+    if (!verifyAdminRequest(request)) {
+      return NextResponse.json({ success: false, error: 'Akses ditolak: Diperlukan autentikasi PIN Bendahara.' }, { status: 401 });
+    }
+
     const body = await request.json();
     if (!body.id) {
       return NextResponse.json({ success: false, error: 'ID kategori wajib ada.' }, { status: 400 });
@@ -52,6 +61,10 @@ export async function PUT(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
+    if (!verifyAdminRequest(request)) {
+      return NextResponse.json({ success: false, error: 'Akses ditolak: Diperlukan autentikasi PIN Bendahara.' }, { status: 401 });
+    }
+
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
     if (!id) {

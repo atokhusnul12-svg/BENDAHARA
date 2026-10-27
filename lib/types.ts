@@ -16,6 +16,7 @@ export interface PengeluaranItem {
   hargaSatuan: number;
   total: number;
   catatan?: string;
+  syncStatus?: 'synced' | 'pending' | 'failed';
 }
 
 export interface SubsidiItem {
@@ -30,6 +31,7 @@ export interface SubsidiItem {
   kategoriNama: string;
   nominal: number;
   catatan?: string;
+  syncStatus?: 'synced' | 'pending' | 'failed';
 }
 
 export interface PeriodeItem {
@@ -77,6 +79,11 @@ export interface FinancialSummary {
   persentasePenggunaan: number;
   jumlahTransaksi: number;
   categories: CategorySummary[];
+  totalSubsidiTerkonfirmasi: number;
+  totalPengeluaranTerkonfirmasi: number;
+  saldoTerkonfirmasi: number;
+  hasPendingSync: boolean;
+  pendingCount: number;
 }
 
 export interface AppDatabase {

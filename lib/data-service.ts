@@ -561,7 +561,9 @@ export async function addPengeluaran(items: Omit<PengeluaranItem, 'id' | 'create
     const kategoriNama = matchedKat?.namaKategori || item.kategoriNama || '';
 
     return {
-      id: 'EXP-' + Date.now().toString(36) + '-' + (index + 1) + '-' + Math.random().toString(36).substring(2, 5),
+      id: item.id && String(item.id).trim()
+        ? String(item.id).trim()
+        : 'EXP-' + Date.now().toString(36) + '-' + (index + 1) + '-' + Math.random().toString(36).substring(2, 5),
       eventId: item.eventId || eventId,
       createdAt: now,
       updatedAt: now,
@@ -590,8 +592,15 @@ export async function addPengeluaran(items: Omit<PengeluaranItem, 'id' | 'create
     }
   }
 
-  // Simpan ke local db
-  localDb.pengeluaran.unshift(...preparedItems);
+  // Simpan ke local db dengan pencegahan duplikasi (Idempotent)
+  for (const prep of preparedItems) {
+    const existingIdx = localDb.pengeluaran.findIndex(p => p.id === prep.id);
+    if (existingIdx !== -1) {
+      localDb.pengeluaran[existingIdx] = prep;
+    } else {
+      localDb.pengeluaran.unshift(prep);
+    }
+  }
   saveLocalDb(localDb);
 
   return { success: true, data: preparedItems };
@@ -702,7 +711,9 @@ export async function addSubsidi(item: Omit<SubsidiItem, 'id' | 'createdAt' | 'u
   const kategoriNama = matchedKat?.namaKategori || item.kategoriNama || '';
 
   const prepared: SubsidiItem = {
-    id: 'SUB-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 6),
+    id: (item as any).id && String((item as any).id).trim()
+      ? String((item as any).id).trim()
+      : 'SUB-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 6),
     createdAt: now,
     updatedAt: now,
     tanggalTransaksi: item.tanggalTransaksi || now.split('T')[0],
@@ -723,7 +734,13 @@ export async function addSubsidi(item: Omit<SubsidiItem, 'id' | 'createdAt' | 'u
     }
   }
 
-  localDb.subsidi.unshift(prepared);
+  // Simpan ke local db dengan pencegahan duplikasi (Idempotent)
+  const existingIdx = localDb.subsidi.findIndex(s => s.id === prepared.id);
+  if (existingIdx !== -1) {
+    localDb.subsidi[existingIdx] = prepared;
+  } else {
+    localDb.subsidi.unshift(prepared);
+  }
   saveLocalDb(localDb);
 
   return { success: true, data: prepared };

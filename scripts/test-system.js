@@ -363,6 +363,153 @@ async function runAllTests() {
   const lbmMatch = matchCategory('LBM', { namaKategori: 'LBM (Lajnah Bahtsul Masail)', id: 'KAT-LBM' });
   assert(lbmMatch === true, 'Tes G9: Toleransi pencocokan kategori singkatan "LBM" ke "LBM (Lajnah Bahtsul Masail)" sukses');
 
+  // =========================================================================
+  // TES H — Keamanan Autentikasi Server & Proteksi Endpoint API
+  // =========================================================================
+  console.log('\n📌 TES H — Keamanan Autentikasi Server & Proteksi Endpoint API');
+  console.log('   Spesifikasi: Verifikasi PIN timing-safe, HMAC session token, proteksi endpoint tanpa auth');
+
+  const { validatePin, createSessionToken, verifySessionToken, verifyAdminRequest } = require('../lib/auth');
+
+  // 1. Uji Validasi PIN
+  assert(validatePin('144805') === true, 'Tes H1: PIN Bendahara yang benar (144805) diterima');
+  assert(validatePin('123456') === false, 'Tes H2: PIN Bendahara yang salah ditolak');
+  assert(validatePin('') === false, 'Tes H3: PIN kosong ditolak');
+
+  // 2. Uji HMAC Session Token
+  const sessionToken = createSessionToken();
+  const decodedSession = Buffer.from(sessionToken, 'base64').toString('utf-8');
+  assert(typeof sessionToken === 'string' && decodedSession.startsWith('mmd_admin:'), 'Tes H4: Format HMAC session token aman dan bertanda tangan');
+  assert(verifySessionToken(sessionToken) === true, 'Tes H5: Verifikasi tanda tangan HMAC session token sah');
+  assert(verifySessionToken('mmd_admin:tampered_token:fake_signature') === false, 'Tes H6: Token yang dimanipulasi berhasil ditolak');
+
+  // 3. Uji Proteksi verifyAdminRequest
+  const mockUnauthReq = {
+    headers: { get: (name) => null },
+    cookies: { get: (name) => undefined },
+  };
+  const unauthResult = verifyAdminRequest(mockUnauthReq);
+  assert(unauthResult === false, 'Tes H7: Request tanpa autentikasi ditolak oleh server (Akses Ditolak)');
+
+  const mockPinReq = {
+    headers: { get: (name) => (name.toLowerCase() === 'x-admin-pin' ? '144805' : null) },
+    cookies: { get: (name) => undefined },
+  };
+  const authPinResult = verifyAdminRequest(mockPinReq);
+  assert(authPinResult === true, 'Tes H8: Request dengan header x-admin-pin yang sah diterima');
+
+  const mockCookieReq = {
+    headers: { get: (name) => null },
+    cookies: { get: (name) => (name === 'mmd_admin_session' ? { value: sessionToken } : undefined) },
+  };
+  const authCookieResult = verifyAdminRequest(mockCookieReq);
+  assert(authCookieResult === true, 'Tes H9: Request dengan cookie mmd_admin_session yang sah diterima');
+
+  // =========================================================================
+  // TES I — Idempotensi Transaksi & Perhitungan Saldo Terkonfirmasi
+  // =========================================================================
+  console.log('\n📌 TES I — Idempotensi Transaksi & Perhitungan Saldo Terkonfirmasi');
+  console.log('   Spesifikasi: Idempotency Key mencegah duplikasi transaksi, pembedaan saldo terkonfirmasi vs sementara');
+
+  const { calculateFinancialSummary } = require('../lib/summary');
+
+  // 1. Uji Idempotensi: kirim data dengan ID yang sama
+  const uniqueIdempotencyKey = 'EXP-IDEMP-TEST-001';
+  const op1 = await addPengeluaran([
+    {
+      id: uniqueIdempotencyKey,
+      kategoriNama: 'LBM (Lajnah Bahtsul Masail)',
+      periodeId: testPeriodLabel,
+      bulanHijriah: 'Jumadal Ula',
+      tahunHijriah: '1448',
+      jenisAcara: 'Idempotency Check',
+      namaBarang: 'Kertas HVS',
+      jumlah: 1,
+      satuan: 'rim',
+      hargaSatuan: 50000,
+      total: 50000,
+      tanggalTransaksi: '2026-10-26',
+    },
+  ]);
+  assert(op1.success === true, 'Tes I1: Operasi penulisan pertama dengan Idempotency Key sukses');
+
+  // Kirim lagi operasi kedua dengan ID yang persis sama (simulasi retry jaringan / duplikasi)
+  await addPengeluaran([
+    {
+      id: uniqueIdempotencyKey,
+      kategoriNama: 'LBM (Lajnah Bahtsul Masail)',
+      periodeId: testPeriodLabel,
+      bulanHijriah: 'Jumadal Ula',
+      tahunHijriah: '1448',
+      jenisAcara: 'Idempotency Check Retry',
+      namaBarang: 'Kertas HVS',
+      jumlah: 1,
+      satuan: 'rim',
+      hargaSatuan: 50000,
+      total: 50000,
+      tanggalTransaksi: '2026-10-26',
+    },
+  ]);
+  const dataAfterOp2 = await getAllData();
+  const countAfter = dataAfterOp2.pengeluaran.filter(p => p.id === uniqueIdempotencyKey).length;
+  assert(countAfter === 1, 'Tes I2: Percobaan penulisan ulang dengan ID sama tidak menghasilkan duplikasi transaksi (Count: 1)');
+
+  // 2. Uji Saldo Terkonfirmasi (Google Sheets) vs Saldo Sementara
+  const mockConfirmedSubsidi = [
+    {
+      id: 'SUB-CONF-1',
+      nominal: 1000000,
+      kategoriNama: 'LBM (Lajnah Bahtsul Masail)',
+      bulanHijriah: 'Jumadal Ula',
+      tahunHijriah: '1448',
+      syncStatus: 'synced',
+    },
+  ];
+  const mockConfirmedExpenses = [
+    {
+      id: 'EXP-CONF-1',
+      total: 350000,
+      kategoriNama: 'LBM (Lajnah Bahtsul Masail)',
+      bulanHijriah: 'Jumadal Ula',
+      tahunHijriah: '1448',
+      syncStatus: 'synced',
+    },
+  ];
+  const mockPendingExpenses = [
+    {
+      id: 'EXP-PEND-1',
+      total: 100000,
+      kategoriNama: 'LBM (Lajnah Bahtsul Masail)',
+      bulanHijriah: 'Jumadal Ula',
+      tahunHijriah: '1448',
+      syncStatus: 'pending',
+    },
+  ];
+
+  const fullSummary = calculateFinancialSummary(
+    [...mockConfirmedExpenses, ...mockPendingExpenses],
+    mockConfirmedSubsidi,
+    dataAfterOp2.kategori,
+    'Jumadal Ula 1448 H'
+  );
+
+  assert(fullSummary.saldoTerkonfirmasi === 650000, 'Tes I3: Saldo terkonfirmasi = Rp 650.000 (1.000.000 - 350.000)', `Aktual: ${fullSummary.saldoTerkonfirmasi}`);
+  assert(fullSummary.saldoTersisa === 550000, 'Tes I4: Saldo sementara (termasuk pending) = Rp 550.000 (1.000.000 - 450.000)', `Aktual: ${fullSummary.saldoTersisa}`);
+  assert(fullSummary.hasPendingSync === true, 'Tes I5: Sistem mendeteksi adanya transaksi pending (hasPendingSync: true)');
+  assert(fullSummary.pendingCount === 1, 'Tes I6: Jumlah antrean transaksi pending terhitung tepat 1 transaksi');
+
+  // =========================================================================
+  // TES J — Kerahasiaan Token & Pencegahan Kebocoran Kredensial
+  // =========================================================================
+  console.log('\n📌 TES J — Kerahasiaan Token & Pencegahan Kebocoran Kredensial');
+  console.log('   Spesifikasi: Token rahasia tidak bocor ke output data publik atau klien browser');
+
+  const publicData = await getAllData();
+  const publicDataStr = JSON.stringify(publicData);
+  assert(!publicDataStr.includes('mmd-amanah-kas-secret'), 'Tes J1: Token default rahasia TIDAK bocor dalam response getAllData()');
+  assert(!publicDataStr.includes('MMD_API_TOKEN'), 'Tes J2: Variabel konfigurasi Script Properties TIDAK bocor ke publik');
+  assert(publicData.syncStatus && !publicData.syncStatus.token, 'Tes J3: Objek syncStatus bebas dari atribut token sensitif');
+
   console.log('\n==========================================================');
   console.log(`HASIL AKHIR PENGUJIAN: ${passCount} LULUS, ${failCount} GAGAL`);
   console.log('==========================================================\n');

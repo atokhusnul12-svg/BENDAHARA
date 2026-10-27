@@ -28,15 +28,24 @@ const HEADERS = {
 };
 
 /**
- * Validasi Token Keamanan
+ * Validasi Token Keamanan Server-to-Server
+ * Token rahasia disimpan di Script Properties (File -> Project Settings -> Script Properties)
+ * Properti: MMD_API_TOKEN
  */
 function validateAuth(token) {
-  const scriptProps = PropertiesService.getScriptProperties();
-  const configuredToken = scriptProps.getProperty('MMD_API_TOKEN') || 'mmd-amanah-kas-secret';
-  if (!token || token !== configuredToken) {
+  if (!token || typeof token !== 'string') {
     return false;
   }
-  return true;
+  const scriptProps = PropertiesService.getScriptProperties();
+  const configuredToken = scriptProps.getProperty('MMD_API_TOKEN');
+  
+  // Jika admin sudah menyetel MMD_API_TOKEN di Script Properties (Disarankan untuk Produksi)
+  if (configuredToken && configuredToken.trim()) {
+    return token.trim() === configuredToken.trim();
+  }
+  
+  // Fallback awal jika admin belum mengonfigurasi Script Properties
+  return token.trim() === 'mmd-amanah-kas-secret';
 }
 
 /**

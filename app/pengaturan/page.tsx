@@ -16,6 +16,9 @@ export default function PengaturanPage() {
     selectedPeriode,
     setSelectedPeriode,
     deleteRecord,
+    isAdmin,
+    openPinModal,
+    logoutAdmin,
   } = useApp();
 
   const [testingSync, setTestingSync] = useState(false);
@@ -93,32 +96,26 @@ export default function PengaturanPage() {
 
     setSavingCategory(true);
     try {
-      if (categoryToEdit) {
-        const res = await fetch('/api/kategori', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            id: categoryToEdit.id,
-            namaKategori: categoryNameInput.trim(),
-            statusAktif: categoryStatusInput,
-          }),
-        });
-        const json = await res.json();
-        if (!json.success) throw new Error(json.error);
-        showToast('Kategori Diperbarui', 'Data kategori berhasil diubah.');
-      } else {
-        const res = await fetch('/api/kategori', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            namaKategori: categoryNameInput.trim(),
-          }),
-        });
-        const json = await res.json();
-        if (!json.success) throw new Error(json.error);
-        showToast('Kategori Ditambahkan', 'Kategori baru berhasil dibuat.');
-      }
+      const endpoint = '/api/kategori';
+      const method = categoryToEdit ? 'PUT' : 'POST';
+      const body = categoryToEdit
+        ? { id: categoryToEdit.id, namaKategori: categoryNameInput.trim(), statusAktif: categoryStatusInput }
+        : { namaKategori: categoryNameInput.trim() };
 
+      const res = await fetch(endpoint, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const json = await res.json();
+
+      if (res.status === 401) {
+        openPinModal(() => handleSaveCategory());
+        throw new Error('Akses ditolak: Diperlukan PIN Bendahara.');
+      }
+      if (!json.success) throw new Error(json.error);
+
+      showToast(categoryToEdit ? 'Kategori Diperbarui' : 'Kategori Ditambahkan', json.message);
       await refreshData();
       setCategoryModalOpen(false);
     } catch (err: any) {
@@ -143,6 +140,10 @@ export default function PengaturanPage() {
       });
 
       const json = await res.json();
+      if (res.status === 401) {
+        openPinModal(() => handleSavePeriod());
+        throw new Error('Akses ditolak: Diperlukan PIN Bendahara.');
+      }
       if (!json.success) throw new Error(json.error);
 
       await refreshData();
@@ -166,6 +167,10 @@ export default function PengaturanPage() {
         body: JSON.stringify({ id: p.id }),
       });
       const json = await res.json();
+      if (res.status === 401) {
+        openPinModal(() => handleSetActivePeriod(p));
+        throw new Error('Akses ditolak: Diperlukan PIN Bendahara.');
+      }
       if (!json.success) throw new Error(json.error);
 
       setSelectedPeriode(p.labelPeriode);
@@ -239,6 +244,10 @@ export default function PengaturanPage() {
         method: 'POST',
       });
       const json = await res.json();
+      if (res.status === 401) {
+        openPinModal(() => handleConfirmReset());
+        throw new Error('Akses ditolak: Diperlukan PIN Bendahara untuk mereset data.');
+      }
       if (!json.success) throw new Error(json.error || 'Gagal membersihkan data.');
 
       if (typeof window !== 'undefined') {
@@ -260,6 +269,10 @@ export default function PengaturanPage() {
 
   // 4. Backup Handler
   const handleDownloadBackup = () => {
+    if (!isAdmin) {
+      openPinModal(() => window.open('/api/backup', '_blank'));
+      return;
+    }
     window.open('/api/backup', '_blank');
   };
 
@@ -277,6 +290,57 @@ export default function PengaturanPage() {
           Konfigurasi koneksi Google Sheets, periode kalender Hijriyah, dan kategori divisi kas pesantren.
         </p>
       </div>
+
+      {/* 0. Keamanan & Akses Bendahara */}
+      <section className="flex flex-col gap-space-sm mb-space-xl">
+        <div className="flex items-center justify-between px-space-xs">
+          <div className="flex items-center gap-space-xs">
+            <span className="material-symbols-outlined text-primary text-[18px]">verified_user</span>
+            <h3 className="font-label-lg text-label-lg text-on-surface font-semibold">
+              Keamanan & Akses Bendahara
+            </h3>
+          </div>
+          <span className={`font-label-sm text-label-sm px-2.5 py-0.5 rounded-full font-semibold flex items-center gap-1 ${
+            isAdmin ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'
+          }`}>
+            <span className={`w-2 h-2 rounded-full ${isAdmin ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+            {isAdmin ? 'Admin Terverifikasi' : 'Tamu / Terkunci'}
+          </span>
+        </div>
+
+        <div className="bg-surface-container-lowest rounded-xl p-space-lg shadow-sm border border-surface-container flex items-center justify-between gap-4">
+          <div className="flex flex-col min-w-0">
+            <span className="font-headline-sm text-sm font-bold text-on-surface">
+              {isAdmin ? 'Sesi Bendahara Aktif' : 'Akses Terkunci (Mode Tamu)'}
+            </span>
+            <span className="font-body-sm text-xs text-on-surface-variant mt-0.5">
+              {isAdmin
+                ? 'Anda memiliki izin penuh untuk mencatat subsidi, pengeluaran, dan mengubah data kas.'
+                : 'Diperlukan PIN Bendahara untuk menyimpan, mengubah, atau menghapus data ke Google Sheets.'}
+            </span>
+          </div>
+
+          {isAdmin ? (
+            <button
+              type="button"
+              onClick={logoutAdmin}
+              className="py-2 px-3.5 rounded-xl border border-error/30 text-error hover:bg-error/10 font-label-sm text-xs font-semibold active:scale-95 transition-all flex items-center gap-1 flex-shrink-0"
+            >
+              <span className="material-symbols-outlined text-[16px]">lock</span>
+              <span>Kunci Akses</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => openPinModal()}
+              className="py-2 px-3.5 rounded-xl bg-primary text-on-primary hover:bg-primary/95 font-label-sm text-xs font-semibold active:scale-95 transition-all flex items-center gap-1 flex-shrink-0 shadow-xs"
+            >
+              <span className="material-symbols-outlined text-[16px]">key</span>
+              <span>Buka Kunci PIN</span>
+            </button>
+          )}
+        </div>
+      </section>
 
       {/* 1. Google Sheets Connection Section */}
       <section className="flex flex-col gap-space-sm mb-space-xl">

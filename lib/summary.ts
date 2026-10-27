@@ -80,6 +80,17 @@ export function calculateFinancialSummary(
   const totalSubsidi = filteredSubsidi.reduce((sum, item) => sum + (Number(item.nominal) || 0), 0);
   const saldoTersisa = totalSubsidi - totalPengeluaran;
 
+  // Transaksi Terkonfirmasi (tercatat di Google Sheets / bukan draft pending)
+  const confirmedPengeluaran = filteredPengeluaran.filter(p => p.syncStatus !== 'pending');
+  const confirmedSubsidi = filteredSubsidi.filter(s => s.syncStatus !== 'pending');
+  const totalPengeluaranTerkonfirmasi = confirmedPengeluaran.reduce((sum, item) => sum + (Number(item.total) || 0), 0);
+  const totalSubsidiTerkonfirmasi = confirmedSubsidi.reduce((sum, item) => sum + (Number(item.nominal) || 0), 0);
+  const saldoTerkonfirmasi = totalSubsidiTerkonfirmasi - totalPengeluaranTerkonfirmasi;
+
+  const pendingCount = filteredPengeluaran.filter(p => p.syncStatus === 'pending').length +
+    filteredSubsidi.filter(s => s.syncStatus === 'pending').length;
+  const hasPendingSync = pendingCount > 0;
+
   const persentasePenggunaan = totalSubsidi > 0
     ? Math.round((totalPengeluaran / totalSubsidi) * 1000) / 10
     : 0;
@@ -124,5 +135,10 @@ export function calculateFinancialSummary(
     persentasePenggunaan,
     jumlahTransaksi: filteredPengeluaran.length,
     categories: categorySummaries,
+    totalSubsidiTerkonfirmasi,
+    totalPengeluaranTerkonfirmasi,
+    saldoTerkonfirmasi,
+    hasPendingSync,
+    pendingCount,
   };
 }

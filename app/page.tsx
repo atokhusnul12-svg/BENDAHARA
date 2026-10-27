@@ -45,7 +45,9 @@ export default function HomePage() {
   const totalSubsidi = summary?.totalSubsidi || 0;
   const totalPengeluaran = summary?.totalPengeluaran || 0;
   const saldoTersisa = summary?.saldoTersisa || 0;
+  const saldoTerkonfirmasi = summary?.saldoTerkonfirmasi ?? saldoTersisa;
   const persentasePenggunaan = summary?.persentasePenggunaan || 0;
+  const hasPendingSync = Boolean(summary?.hasPendingSync);
 
   return (
     <div className="flex flex-col w-full relative">
@@ -167,9 +169,21 @@ export default function HomePage() {
 
         {/* Sisa Subsidi Primary Display */}
         <div className="mb-3.5 relative z-10">
-          <span className="font-label-sm text-xs text-white/90 block mb-1 font-medium">
-            Sisa Dana Kas<span className="sr-only"> Tersedia</span>
-          </span>
+          <div className="flex items-center justify-between mb-1">
+            <span className="font-label-sm text-xs text-white/90 font-medium">
+              {hasPendingSync ? 'Saldo Sementara (Termasuk Pending)' : 'Sisa Dana Kas Tersedia'}
+            </span>
+            {hasPendingSync ? (
+              <span className="text-[10px] bg-amber-400 text-amber-950 font-bold px-2 py-0.5 rounded-full shadow-xs">
+                {summary?.pendingCount || 1} Menunggu Sinkron
+              </span>
+            ) : (
+              <span className="text-[10px] bg-emerald-400/30 text-emerald-100 font-semibold px-2 py-0.5 rounded-full flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-300"></span>
+                Terkonfirmasi Sheets
+              </span>
+            )}
+          </div>
           <div className="flex items-baseline gap-2">
             <span className="font-title-currency-lg text-[28px] sm:text-[32px] text-white font-bold tracking-tight tabular-nums leading-none">
               {formatRupiah(saldoTersisa)}
@@ -178,6 +192,11 @@ export default function HomePage() {
               {saldoTersisa >= 0 ? 'Tersedia' : 'Defisit'}
             </span>
           </div>
+          {hasPendingSync && (
+            <div className="mt-1 text-xs text-white/80 font-medium">
+              Saldo Terkonfirmasi Google Sheets: <strong>{formatRupiah(saldoTerkonfirmasi)}</strong>
+            </div>
+          )}
         </div>
 
         {/* Overall Linear Progress Bar with Companion Text */}

@@ -1,8 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { addPengeluaran, deletePengeluaran, updatePengeluaran } from '@/lib/data-service';
+import { verifyAdminRequest } from '@/lib/auth';
 
 export async function POST(request: NextRequest) {
   try {
+    if (!verifyAdminRequest(request)) {
+      return NextResponse.json(
+        { success: false, error: 'Akses ditolak: Diperlukan autentikasi PIN Bendahara.' },
+        { status: 401 }
+      );
+    }
+
     const body = await request.json();
 
     // Mendukung batch item atau item tunggal
@@ -50,7 +58,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       message: isGSheets
-        ? 'Pengeluaran berhasil disimpan ke Google Sheets.'
+        ? 'Pengeluaran berhasil disimpan dan terkonfirmasi di Google Sheets.'
         : 'Pengeluaran berhasil disimpan ke penyimpanan lokal.',
       data: result.data,
     });
@@ -64,6 +72,13 @@ export async function POST(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
+    if (!verifyAdminRequest(request)) {
+      return NextResponse.json(
+        { success: false, error: 'Akses ditolak: Diperlukan autentikasi PIN Bendahara.' },
+        { status: 401 }
+      );
+    }
+
     const body = await request.json();
     if (!body.id) {
       return NextResponse.json({ success: false, error: 'ID transaksi pengeluaran wajib disertakan.' }, { status: 400 });
@@ -104,6 +119,13 @@ export async function PUT(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
+    if (!verifyAdminRequest(request)) {
+      return NextResponse.json(
+        { success: false, error: 'Akses ditolak: Diperlukan autentikasi PIN Bendahara.' },
+        { status: 401 }
+      );
+    }
+
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
 
