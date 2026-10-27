@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '@/context/AppContext';
 import { formatNumber, formatRupiah, parseRupiah } from '@/lib/format';
 
@@ -39,7 +39,14 @@ export default function ExpenseModal() {
     updatePengeluaranRecord,
   } = useApp();
 
-
+  // Session tracking to ensure modal state is initialized ONCE per session and never wiped out by background refreshes or focus events
+  const initializedSessionRef = useRef<string | null>(null);
+  const kategoriRef = useRef(kategori);
+  kategoriRef.current = kategori;
+  const periodeRef = useRef(periode);
+  periodeRef.current = periode;
+  const selectedPeriodeRef = useRef(selectedPeriode);
+  selectedPeriodeRef.current = selectedPeriode;
 
   const [saving, setSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -82,19 +89,35 @@ export default function ExpenseModal() {
 
   // Synchronize initial state when modal opens
   useEffect(() => {
-    if (!isExpenseModalOpen) return;
+    if (!isExpenseModalOpen) {
+      initializedSessionRef.current = null;
+      return;
+    }
 
+    const sessionKey = expenseToEdit
+      ? (expenseToEdit.id ? `edit-${expenseToEdit.id}` : `create-${expenseToEdit.kategoriNama || 'card'}`)
+      : 'create-new';
+
+    // Prevent re-initialization if already initialized for this modal session
+    if (initializedSessionRef.current === sessionKey) {
+      return;
+    }
+    initializedSessionRef.current = sessionKey;
 
     setErrorMessage('');
     setIsAddingCategory(false);
     setNewCategoryName('');
     const today = new Date().toISOString().split('T')[0];
 
+    const currentKategori = kategoriRef.current;
+    const currentPeriode = periodeRef.current;
+    const currentSelectedPeriode = selectedPeriodeRef.current;
+
     if (expenseToEdit && expenseToEdit.id) {
       // Edit existing single item
       setKategoriNama(expenseToEdit.kategoriNama);
       const matchedPer = (expenseToEdit.bulanHijriah + ' ' + expenseToEdit.tahunHijriah + ' H').trim();
-      setPeriodeLabel(matchedPer || selectedPeriode);
+      setPeriodeLabel(matchedPer || currentSelectedPeriode);
       const rawDate = expenseToEdit.tanggalTransaksi;
       setTanggalTransaksi(rawDate ? String(rawDate).split('T')[0] : today);
       setJenisAcara(expenseToEdit.jenisAcara);
@@ -113,16 +136,16 @@ export default function ExpenseModal() {
       // Add new (bisa dengan kategori default dari card)
       const defaultKat =
         expenseToEdit?.kategoriNama ||
-        kategori.find(k => k.statusAktif)?.namaKategori ||
-        (kategori[0]?.namaKategori ?? 'LBM (Lajnah Bahtsul Masail)');
+        currentKategori.find(k => k.statusAktif)?.namaKategori ||
+        (currentKategori[0]?.namaKategori ?? 'LBM (Lajnah Bahtsul Masail)');
       setKategoriNama(defaultKat);
-      setPeriodeLabel(selectedPeriode || (periode[0]?.labelPeriode ?? 'Jumadal Ula 1448 H'));
+      setPeriodeLabel(currentSelectedPeriode || (currentPeriode[0]?.labelPeriode ?? 'Jumadal Ula 1448 H'));
       setTanggalTransaksi(today);
       setJenisAcara('');
       setCatatan('');
       setItems([createDefaultRow()]);
     }
-  }, [isExpenseModalOpen, expenseToEdit, kategori, periode, selectedPeriode]);
+  }, [isExpenseModalOpen, expenseToEdit]);
 
   if (!isExpenseModalOpen) return null;
 

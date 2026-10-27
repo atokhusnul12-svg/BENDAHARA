@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '@/context/AppContext';
 import { formatNumber, parseRupiah } from '@/lib/format';
 
@@ -18,7 +18,14 @@ export default function SubsidyModal() {
     updateSubsidiRecord,
   } = useApp();
 
-
+  // Session tracking to ensure modal state is initialized ONCE per session and never wiped out by background refreshes or focus events
+  const initializedSessionRef = useRef<string | null>(null);
+  const kategoriRef = useRef(kategori);
+  kategoriRef.current = kategori;
+  const periodeRef = useRef(periode);
+  periodeRef.current = periode;
+  const selectedPeriodeRef = useRef(selectedPeriode);
+  selectedPeriodeRef.current = selectedPeriode;
 
   const [saving, setSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -56,18 +63,35 @@ export default function SubsidyModal() {
   }, [isSubsidyModalOpen, closeSubsidyModal]);
 
   useEffect(() => {
-    if (!isSubsidyModalOpen) return;
+    if (!isSubsidyModalOpen) {
+      initializedSessionRef.current = null;
+      return;
+    }
+
+    const sessionKey = subsidyToEdit
+      ? (subsidyToEdit.id ? `edit-${subsidyToEdit.id}` : `create-${subsidyToEdit.kategoriNama || 'card'}`)
+      : 'create-new';
+
+    // Prevent re-initialization if already initialized for this modal session
+    if (initializedSessionRef.current === sessionKey) {
+      return;
+    }
+    initializedSessionRef.current = sessionKey;
 
     setErrorMessage('');
     setIsAddingCategory(false);
     setNewCategoryName('');
     const today = new Date().toISOString().split('T')[0];
 
+    const currentKategori = kategoriRef.current;
+    const currentPeriode = periodeRef.current;
+    const currentSelectedPeriode = selectedPeriodeRef.current;
+
     if (subsidyToEdit && subsidyToEdit.id) {
       // Mode Edit
       setKategoriNama(subsidyToEdit.kategoriNama);
       const matchedPer = (subsidyToEdit.bulanHijriah + ' ' + subsidyToEdit.tahunHijriah + ' H').trim();
-      setPeriodeLabel(matchedPer || selectedPeriode);
+      setPeriodeLabel(matchedPer || currentSelectedPeriode);
       const rawDate = subsidyToEdit.tanggalTransaksi;
       setTanggalTransaksi(rawDate ? String(rawDate).split('T')[0] : today);
       setNominal(Number(subsidyToEdit.nominal) || 0);
@@ -76,15 +100,15 @@ export default function SubsidyModal() {
       // Mode Tambah (bisa dengan kategori default dari card)
       const defaultKat =
         subsidyToEdit?.kategoriNama ||
-        kategori.find(k => k.statusAktif)?.namaKategori ||
-        (kategori[0]?.namaKategori ?? 'LBM (Lajnah Bahtsul Masail)');
+        currentKategori.find(k => k.statusAktif)?.namaKategori ||
+        (currentKategori[0]?.namaKategori ?? 'LBM (Lajnah Bahtsul Masail)');
       setKategoriNama(defaultKat);
-      setPeriodeLabel(selectedPeriode || (periode[0]?.labelPeriode ?? 'Jumadal Ula 1448 H'));
+      setPeriodeLabel(currentSelectedPeriode || (currentPeriode[0]?.labelPeriode ?? 'Jumadal Ula 1448 H'));
       setTanggalTransaksi(today);
       setNominal(0);
       setCatatan('');
     }
-  }, [isSubsidyModalOpen, subsidyToEdit, kategori, periode, selectedPeriode]);
+  }, [isSubsidyModalOpen, subsidyToEdit]);
 
   const handleQuickCreateCategory = async () => {
     const name = newCategoryName.trim();

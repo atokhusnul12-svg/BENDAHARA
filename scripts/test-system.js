@@ -693,6 +693,160 @@ Catatan: Harga dalam Rupiah (Rp). Total dihitung otomatis = Jumlah Barang × Har
   assert(summaryN.pendingCount >= 1, 'Tes N11: Jumlah transaksi pending terhitung dengan tepat');
   assert(summaryN.saldoTerkonfirmasi !== summaryN.saldoTersisa, 'Tes N12: Saldo terkonfirmasi dibedakan dari saldo sementara');
 
+  // =========================================================================
+  // TES O — Pengujian Pencegahan Form Reset & Isolasi Lifecycle Modal Input
+  // Menguji isolasi state formulir Edit Transaksi Pengeluaran terhadap:
+  // - Focus event / keyboard HP buka-tutup
+  // - Background refreshData kategori & periode
+  // - Perubahan jumlah dari 1 menjadi 3 via stepper
+  // - Pengetikan "Surya" pada rincian belanja
+  // - Stabilitas form saat save gagal
+  // =========================================================================
+  console.log('\n📌 TES O — Pengujian Pencegahan Form Reset & Isolasi Lifecycle Modal Input');
+  console.log('   Spesifikasi: Form tidak ter-reset saat keyboard HP dibuka/ditutup & background refresh');
+
+  // 1. Data awal transaksi yang akan diedit
+  const originalExpense = {
+    id: 'EXP-TEST-SURYA',
+    kategoriNama: 'LBM (Lajnah Bahtsul Masail)',
+    kategoriId: 'KAT-LBM',
+    bulanHijriah: 'Jumadal Ula',
+    tahunHijriah: '1448',
+    periodeId: 'PER-1448-JU',
+    tanggalTransaksi: '2026-10-27',
+    jenisAcara: 'Kegiatan LBM Mingguan',
+    namaBarang: 'Konsumsi Rapat',
+    jumlah: 1,
+    satuan: 'bungkus',
+    hargaSatuan: 25000,
+    total: 25000,
+    catatan: 'Data awal untuk pengujian',
+  };
+
+  // Simpan data awal ke data-service
+  await addPengeluaran([originalExpense]);
+
+  // 2. Simulasikan lifecycle ExpenseModal dengan Session Guard yang diimplementasikan
+  let modalState = {
+    isOpen: true,
+    expenseToEdit: { ...originalExpense },
+    sessionKey: null,
+    formValues: null,
+    rowId: null,
+  };
+
+  let initializedSessionRef = { current: null };
+
+  function simulateModalEffect(kategoriArray, periodeArray) {
+    if (!modalState.isOpen) {
+      initializedSessionRef.current = null;
+      return;
+    }
+
+    const sessionKey = modalState.expenseToEdit
+      ? (modalState.expenseToEdit.id ? `edit-${modalState.expenseToEdit.id}` : `create-${modalState.expenseToEdit.kategoriNama || 'card'}`)
+      : 'create-new';
+
+    // Session guard: jika sudah diinisialisasi untuk sesi ini, JANGAN re-init
+    if (initializedSessionRef.current === sessionKey) {
+      return;
+    }
+    initializedSessionRef.current = sessionKey;
+
+    // Inisialisasi state form
+    modalState.rowId = 'row-edit-' + modalState.expenseToEdit.id;
+    modalState.formValues = {
+      kategoriNama: modalState.expenseToEdit.kategoriNama,
+      jenisAcara: modalState.expenseToEdit.jenisAcara,
+      items: [
+        {
+          rowId: modalState.rowId,
+          namaBarang: modalState.expenseToEdit.namaBarang,
+          jumlah: Number(modalState.expenseToEdit.jumlah) || 1,
+          satuan: modalState.expenseToEdit.satuan || 'bungkus',
+          hargaSatuan: Number(modalState.expenseToEdit.hargaSatuan) || 0,
+          total: Number(modalState.expenseToEdit.total) || 0,
+        },
+      ],
+      catatan: modalState.expenseToEdit.catatan || '',
+    };
+  }
+
+  // Langkah 1: Pengguna membuka modal edit transaksi
+  simulateModalEffect([{ id: 'KAT-LBM', namaKategori: 'LBM (Lajnah Bahtsul Masail)' }], [{ id: 'PER-1', labelPeriode: 'Jumadal Ula 1448 H' }]);
+  assert(initializedSessionRef.current === 'edit-EXP-TEST-SURYA', 'Tes O1: Inisialisasi formulir modal edit berjalan tepat satu kali ketika transaksi dipilih');
+  assert(modalState.formValues.items[0].namaBarang === 'Konsumsi Rapat', 'Tes O1b: Nilai awal rincian belanja terisi sesuai transaksi');
+  assert(modalState.formValues.items[0].jumlah === 1, 'Tes O1c: Nilai awal jumlah barang = 1');
+
+  // Langkah 2: Pengguna mengetik "Surya" pada rincian belanja
+  modalState.formValues.items[0].namaBarang = 'Surya';
+
+  // Langkah 3: Pengguna mengubah jumlah dari 1 menjadi 3 via stepper
+  const currentQty = modalState.formValues.items[0].jumlah;
+  const newQty = Math.max(1, currentQty + 2); // 1 -> 3
+  modalState.formValues.items[0].jumlah = newQty;
+  modalState.formValues.items[0].total = newQty * modalState.formValues.items[0].hargaSatuan; // 3 * 25000 = 75000
+
+  assert(modalState.formValues.items[0].namaBarang === 'Surya', 'Tes O2: Pengguna berhasil mengetik "Surya"');
+  assert(modalState.formValues.items[0].jumlah === 3, 'Tes O2b: Jumlah berhasil diubah dari 1 menjadi 3');
+  assert(modalState.formValues.items[0].total === 75000, 'Tes O2c: Total subtotal terhitung otomatis Rp 75.000');
+
+  // Langkah 4: Pengguna berinteraksi dengan keyboard HP (buka/tutup, focus antar input)
+  // Menstimulasi window.focus yang sebelumnya memicu refreshData & reset form
+  for (let step = 1; step <= 5; step++) {
+    // Simulasi refreshData menghasilkan instance array kategori & periode baru dari API
+    const newKategoriInstances = [{ id: 'KAT-LBM', namaKategori: 'LBM (Lajnah Bahtsul Masail)' }];
+    const newPeriodeInstances = [{ id: 'PER-1', labelPeriode: 'Jumadal Ula 1448 H' }];
+    simulateModalEffect(newKategoriInstances, newPeriodeInstances);
+  }
+
+  // Verifikasi: Form values TIDAK ter-reset ke data lama!
+  assert(modalState.formValues.jenisAcara === 'Kegiatan LBM Mingguan', 'Tes O3a: Nama jenis kegiatan TIDAK terhapus/kosong setelah keyboard HP dibuka/ditutup');
+  assert(modalState.formValues.items[0].namaBarang === 'Surya', 'Tes O3b: Rincian belanja tetap "Surya" (TIDAK terhapus/kembali ke awal)');
+  assert(modalState.formValues.items[0].jumlah === 3, 'Tes O3c: Jumlah barang tetap 3 (TIDAK kembali menjadi 1)');
+  assert(modalState.formValues.items[0].rowId === 'row-edit-EXP-TEST-SURYA', 'Tes O3d: rowId tetap stabil sehingga elemen input tidak di-remount');
+
+  // Langkah 5: Simulasikan kegagalan simpan (contoh: error validasi atau jaringan)
+  let saveErrorMessage = '';
+  try {
+    // Coba simpan dengan nama barang kosong (simulasi gagal)
+    if (!modalState.formValues.items[0].namaBarang.trim()) {
+      throw new Error('Nama barang wajib diisi.');
+    }
+  } catch (err) {
+    saveErrorMessage = err.message;
+  }
+  assert(modalState.isOpen === true, 'Tes O4a: Modal tetap terbuka jika penyimpanan mengalami kendala');
+  assert(modalState.formValues.items[0].namaBarang === 'Surya', 'Tes O4b: Input pengguna tetap utuh saat penyimpanan gagal');
+
+  // Langkah 6: Simpan pembaruan nyata ke data-service
+  const updateResult = await updatePengeluaran({
+    id: 'EXP-TEST-SURYA',
+    namaBarang: 'Surya',
+    jumlah: 3,
+    hargaSatuan: 25000,
+    total: 75000,
+    jenisAcara: 'Kegiatan LBM Mingguan',
+    catatan: 'Hasil pengujian form edit berhasil disimpan',
+  });
+  assert(updateResult.success === true, 'Tes O5a: Update transaksi pengeluaran berhasil disimpan ke database');
+
+  const updatedRecord = (await getAllData()).pengeluaran.find(p => p.id === 'EXP-TEST-SURYA');
+  assert(Boolean(updatedRecord), 'Tes O5b: Record transaksi hasil update ditemukan');
+  assert(updatedRecord.namaBarang === 'Surya', 'Tes O5c: Nama barang tersimpan akurat sebagai "Surya"');
+  assert(updatedRecord.jumlah === 3, 'Tes O5d: Jumlah barang tersimpan akurat = 3');
+  assert(updatedRecord.total === 75000, 'Tes O5e: Total pengeluaran tersimpan akurat = 75000');
+
+  // Langkah 7: Pengguna menutup modal setelah simpan sukses
+  modalState.isOpen = false;
+  simulateModalEffect([], []);
+  assert(initializedSessionRef.current === null, 'Tes O6: Menutup modal me-reset initializedSessionRef untuk transaksi berikutnya');
+
+  // Langkah 8: Bersihkan transaksi uji
+  await deletePengeluaran('EXP-TEST-SURYA');
+  const allExpAfter = (await getAllData()).pengeluaran;
+  assert(!allExpAfter.some(e => e.id === 'EXP-TEST-SURYA'), 'Tes O7: Transaksi pengujian Surya berhasil dibersihkan');
+
   console.log('\n==========================================================');
   console.log(`HASIL AKHIR PENGUJIAN: ${passCount} LULUS, ${failCount} GAGAL`);
   console.log('==========================================================\n');

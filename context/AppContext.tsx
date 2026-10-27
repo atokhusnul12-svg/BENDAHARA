@@ -762,6 +762,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     refreshData();
   }, [refreshData]);
 
+  const isModalActiveRef = useRef(false);
+  isModalActiveRef.current = isExpenseModalOpen || isSubsidyModalOpen;
+  const lastFocusTimeRef = useRef(0);
+
   // 1. Sinkronisasi antar-tab di browser / HP yang sama via BroadcastChannel
   useEffect(() => {
     if (typeof window === 'undefined' || !('BroadcastChannel' in window)) return;
@@ -769,6 +773,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const channel = new BroadcastChannel('mmd_cross_device_sync');
       channel.onmessage = (event) => {
         if (event.data?.type === 'DATA_UPDATED') {
+          if (isModalActiveRef.current) return;
           refreshData();
         }
       };
@@ -782,10 +787,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        if (isModalActiveRef.current) return;
         refreshData();
       }
     };
     const handleFocus = () => {
+      // Jangan refresh jika modal input aktif (mencegah input terhapus saat keyboard HP dibuka/ditutup)
+      if (isModalActiveRef.current) return;
+      const now = Date.now();
+      if (now - lastFocusTimeRef.current < 15000) return;
+      lastFocusTimeRef.current = now;
       refreshData();
     };
 
@@ -803,6 +814,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const interval = setInterval(() => {
       if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        if (isModalActiveRef.current) return;
         refreshData();
       }
     }, 20000);
@@ -814,6 +826,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const handleOnline = () => {
       showToast('Koneksi Pulih', 'Menyinkronkan data dengan server...', 'info');
+      if (isModalActiveRef.current) return;
       refreshData();
     };
     window.addEventListener('online', handleOnline);
