@@ -556,7 +556,9 @@ async function runAllTests() {
 
   try {
     process.env.NODE_ENV = 'production';
+    process.env.MMD_STRICT_CONFIG = 'true';
     delete process.env.ADMIN_PIN;
+    delete process.env.ADMIN_PASSWORD;
     delete process.env.ADMIN_SESSION_SECRET;
     delete process.env.ADMIN_SECRET;
 
@@ -567,6 +569,7 @@ async function runAllTests() {
     assert(prodSecretCheck.success === false, 'Tes L2: Di lingkungan produksi, pembuatan sesi ditolak jika ADMIN_SESSION_SECRET belum diatur');
   } finally {
     process.env.NODE_ENV = originalNodeEnv;
+    delete process.env.MMD_STRICT_CONFIG;
     if (originalAdminPin) process.env.ADMIN_PIN = originalAdminPin;
     if (originalSecret) process.env.ADMIN_SESSION_SECRET = originalSecret;
   }

@@ -5,7 +5,7 @@ import { useApp } from '@/context/AppContext';
 
 export default function LoginScreen() {
   const { loginAdmin } = useApp();
-  const [username, setUsername] = useState('MMD');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -18,7 +18,7 @@ export default function LoginScreen() {
       return;
     }
     if (!password.trim()) {
-      setErrorMessage('Silakan masukkan Kata Sandi (Password).');
+      setErrorMessage('Silakan masukkan Kata Sandi.');
       return;
     }
 
@@ -28,7 +28,7 @@ export default function LoginScreen() {
     try {
       const result = await loginAdmin(username.trim(), password.trim());
       if (!result.success) {
-        setErrorMessage(result.error || 'Username atau Password salah.');
+        setErrorMessage(result.error || 'Username atau Kata Sandi salah.');
       }
     } catch (err: any) {
       setErrorMessage(err.message || 'Terjadi gangguan jaringan.');
@@ -85,7 +85,7 @@ export default function LoginScreen() {
                     setUsername(e.target.value);
                     if (errorMessage) setErrorMessage('');
                   }}
-                  placeholder="MMD"
+                  placeholder="Masukkan Username"
                   className="w-full pl-10 pr-4 py-3 rounded-xl border border-outline-variant/60 bg-surface-container-low text-on-surface font-medium text-body-md focus:border-primary focus:bg-white focus:ring-2 focus:ring-primary/20 outline-none transition-all uppercase tracking-wider"
                   autoCapitalize="characters"
                   autoComplete="username"
@@ -110,7 +110,7 @@ export default function LoginScreen() {
                     setPassword(e.target.value);
                     if (errorMessage) setErrorMessage('');
                   }}
-                  placeholder="BENDAHARA"
+                  placeholder="Masukkan Kata Sandi"
                   className="w-full pl-10 pr-11 py-3 rounded-xl border border-outline-variant/60 bg-surface-container-low text-on-surface font-medium text-body-md focus:border-primary focus:bg-white focus:ring-2 focus:ring-primary/20 outline-none transition-all"
                   autoComplete="current-password"
                   disabled={loading}
@@ -160,18 +160,6 @@ export default function LoginScreen() {
               )}
             </button>
           </form>
-
-          {/* Petunjuk Kredensial Akses */}
-          <div className="mt-5 pt-4 border-t border-surface-container flex flex-col items-center text-center">
-            <span className="text-[11px] text-on-surface-variant/80 font-medium">
-              Kredensial Akses Buku Kas:
-            </span>
-            <div className="inline-flex items-center gap-2 mt-1 px-2.5 py-1 rounded-lg bg-surface-container-low text-[11px] font-mono text-primary font-semibold">
-              <span>Username: <b>MMD</b></span>
-              <span>•</span>
-              <span>Password: <b>BENDAHARA</b></span>
-            </div>
-          </div>
         </div>
 
         {/* Footer info */}
