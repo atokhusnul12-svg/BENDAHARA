@@ -23,12 +23,22 @@ const WINDOW_MS = 15 * 60 * 1000; // Window 15 Menit
 const LOCKOUT_MS = 15 * 60 * 1000; // Kunci 15 Menit
 
 /**
+ * Mengambil Kredensial Login Administrator (Username & Password)
+ * Default kredensial: USERNAME=MMD, PASSWORD=BENDAHARA
+ */
+export function getAdminCredentials(): { username: string; password: string } {
+  const username = process.env.ADMIN_USERNAME?.trim() || 'MMD';
+  const password = process.env.ADMIN_PASSWORD?.trim() || 'BENDAHARA';
+  return { username, password };
+}
+
+/**
  * Mengambil PIN Administrator
- * Di lingkungan produksi (Vercel), wajib disetel via ADMIN_PIN.
+ * Di lingkungan produksi (Vercel), wajib disetel via ADMIN_PIN atau ADMIN_PASSWORD.
  * Tidak ada fallback statis jika di produksi.
  */
 export function getAdminPinConfig(): { success: boolean; pin?: string; error?: string } {
-  const envPin = process.env.ADMIN_PIN?.trim();
+  const envPin = process.env.ADMIN_PIN?.trim() || process.env.ADMIN_PASSWORD?.trim();
   if (envPin && envPin.length >= 4) {
     return { success: true, pin: envPin };
   }
@@ -37,7 +47,7 @@ export function getAdminPinConfig(): { success: boolean; pin?: string; error?: s
   if (process.env.NODE_ENV === 'production') {
     return {
       success: false,
-      error: 'Konfigurasi Keamanan Belum Lengkap: Variabel ADMIN_PIN belum disetel pada Environment Variables Vercel. Harap atur PIN pada dashboard Vercel.',
+      error: 'Konfigurasi Keamanan Belum Lengkap: Variabel ADMIN_PASSWORD atau ADMIN_PIN belum disetel pada Environment Variables Vercel.',
     };
   }
 
@@ -148,17 +158,53 @@ export function resetRateLimitStore(): void {
 }
 
 /**
- * Validasi PIN Administrator menggunakan timing-safe comparison
+ * Validasi Kredensial Login Administrator (Username & Password)
+ * Menggunakan timing-safe comparison untuk mencegah timing attack
+ */
+export function validateLogin(usernameInput: string, passwordInput: string): boolean {
+  if (!usernameInput || !passwordInput) return false;
+  const creds = getAdminCredentials();
+
+  // Username case-insensitive (MMD == mmd)
+  if (usernameInput.trim().toUpperCase() !== creds.username.toUpperCase()) {
+    return false;
+  }
+
+  // Password timing-safe comparison
+  const a = Buffer.from(passwordInput.trim());
+  const b = Buffer.from(creds.password);
+  if (a.length !== b.length) return false;
+  return crypto.timingSafeEqual(a, b);
+}
+
+/**
+ * Validasi PIN/Password Administrator menggunakan timing-safe comparison
  */
 export function validatePin(inputPin: string): boolean {
   if (!inputPin) return false;
-  const config = getAdminPinConfig();
-  if (!config.success || !config.pin) return false;
+  const trimmed = inputPin.trim();
 
-  const a = Buffer.from(inputPin.trim());
-  const b = Buffer.from(config.pin);
-  if (a.length !== b.length) return false;
-  return crypto.timingSafeEqual(a, b);
+  // 1. Cek terhadap ADMIN_PIN terkonfigurasi (misal 144805)
+  const config = getAdminPinConfig();
+  if (config.success && config.pin) {
+    const a = Buffer.from(trimmed);
+    const b = Buffer.from(config.pin);
+    if (a.length === b.length && crypto.timingSafeEqual(a, b)) {
+      return true;
+    }
+  }
+
+  // 2. Cek terhadap password login (BENDAHARA)
+  const creds = getAdminCredentials();
+  if (creds.password) {
+    const a = Buffer.from(trimmed);
+    const b = Buffer.from(creds.password);
+    if (a.length === b.length && crypto.timingSafeEqual(a, b)) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 /**

@@ -4,13 +4,14 @@ import React, { createContext, useContext, useEffect, useState, useCallback, use
 import {
   FinancialSummary,
   KategoriItem,
+  PengeluaranInput,
   PengeluaranItem,
   PeriodeItem,
+  SubsidiInput,
   SubsidiItem,
   SyncStatus,
 } from '@/lib/types';
 import { calculateFinancialSummary } from '@/lib/summary';
-import AdminPinModal from '@/components/AdminPinModal';
 
 interface ToastState {
   show: boolean;
@@ -34,9 +35,11 @@ interface AppContextType {
   showToast: (title: string, subtitle?: string, type?: 'success' | 'error' | 'info') => void;
   hideToast: () => void;
   // Admin Auth
+  authLoading: boolean;
   isAdmin: boolean;
-  verifyAdminPin: (pin: string) => Promise<{ success: boolean; error?: string }>;
+  loginAdmin: (username: string, password: string) => Promise<{ success: boolean; error?: string }>;
   logoutAdmin: () => Promise<void>;
+  verifyAdminPin: (pin: string) => Promise<{ success: boolean; error?: string }>;
   openPinModal: (onSuccess?: () => void) => void;
   closePinModal: () => void;
   // Modal Pengeluaran
@@ -52,9 +55,9 @@ interface AppContextType {
   removeSubsidiLocally: (id: string) => void;
   deleteRecord: (type: 'subsidi' | 'pengeluaran' | 'periode' | 'kategori', id: string) => Promise<boolean>;
   // Single Source of Truth CRUD Handlers
-  addSubsidiRecord: (item: Omit<SubsidiItem, 'id' | 'createdAt' | 'updatedAt'>) => Promise<SubsidiItem>;
+  addSubsidiRecord: (item: SubsidiInput) => Promise<SubsidiItem>;
   updateSubsidiRecord: (item: Partial<SubsidiItem> & { id: string }) => Promise<boolean>;
-  addPengeluaranBatch: (items: Omit<PengeluaranItem, 'id' | 'createdAt' | 'updatedAt'>[]) => Promise<PengeluaranItem[]>;
+  addPengeluaranBatch: (items: PengeluaranInput[]) => Promise<PengeluaranItem[]>;
   updatePengeluaranRecord: (item: Partial<PengeluaranItem> & { id: string }) => Promise<boolean>;
 }
 
@@ -156,6 +159,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // Admin Auth State
+  const [authLoading, setAuthLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isPinModalOpen, setIsPinModalOpen] = useState(false);
   const pinSuccessCallbackRef = useRef<(() => void) | null>(null);
@@ -169,7 +173,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setIsAdmin(Boolean(json.authenticated));
       return Boolean(json.authenticated);
     } catch {
+      setIsAdmin(false);
       return false;
+    } finally {
+      setAuthLoading(false);
     }
   }, []);
 
@@ -177,35 +184,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     checkAuthStatus();
   }, [checkAuthStatus]);
 
-  const openPinModal = useCallback((onSuccess?: () => void) => {
-    if (onSuccess) {
-      pinSuccessCallbackRef.current = onSuccess;
-    }
-    setIsPinModalOpen(true);
-  }, []);
-
-  const closePinModal = useCallback(() => {
-    setIsPinModalOpen(false);
-    pinSuccessCallbackRef.current = null;
-  }, []);
-
-  const verifyAdminPin = useCallback(async (pin: string) => {
+  // Login Administrator menggunakan Username & Password
+  const loginAdmin = useCallback(async (username: string, password: string) => {
     try {
       const res = await fetch('/api/auth', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pin }),
+        body: JSON.stringify({ username, password }),
       });
       const json = await res.json();
       if (res.ok && json.success) {
         setIsAdmin(true);
-        showToast('Autentikasi Berhasil', 'Akses Bendahara terverifikasi.');
+        showToast('Login Berhasil', 'Selamat datang di Buku Kas Bendahara MMD.');
         if (refreshDataRef.current) {
           refreshDataRef.current();
         }
         return { success: true };
       }
-      return { success: false, error: json.error || 'PIN Bendahara salah.' };
+      return { success: false, error: json.error || 'Username atau Password salah.' };
     } catch (err: any) {
       return { success: false, error: err.message || 'Gagal menghubungi server.' };
     }
@@ -220,6 +216,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setIsAdmin(false);
     }
   }, [showToast]);
+
+  // Backward compatible verifyAdminPin (maps to password authentication)
+  const verifyAdminPin = useCallback(async (pin: string) => {
+    return loginAdmin('MMD', pin);
+  }, [loginAdmin]);
+
+  // Stub openPinModal agar pemanggilan lama tidak menampilkan popup kode akses
+  const openPinModal = useCallback((_onSuccess?: () => void) => {
+    // Sengaja di-stub: kode akses popup ditiadakan sesuai instruksi pengguna
+  }, []);
+
+  const closePinModal = useCallback(() => {
+    setIsPinModalOpen(false);
+  }, []);
 
   // Modal Pengeluaran
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
@@ -292,6 +302,35 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     // Unique Idempotency Key
     const id = 'SUB-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 6);
 
+    // Kirim langsung ke API server
+    const res = await fetch('/api/subsidi', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...item,
+        id,
+        nominal: Number(item.nominal) || 0,
+        catatan: item.catatan || '',
+        tanggalTransaksi: item.tanggalTransaksi || now.split('T')[0],
+        bulanHijriah: item.bulanHijriah || '',
+        tahunHijriah: String(item.tahunHijriah || ''),
+        periodeId: item.periodeId || '',
+        kategoriId: item.kategoriId || '',
+        kategoriNama: item.kategoriNama || '',
+      }),
+    });
+    const json = await res.json().catch(() => ({ success: false, error: 'Respon server tidak valid.' }));
+
+    if (res.status === 401) {
+      setIsAdmin(false);
+      throw new Error('Sesi Anda telah berakhir. Silakan login kembali.');
+    }
+
+    if (!res.ok || !json.success) {
+      throw new Error(json?.error || 'Gagal menyimpan subsidi ke Google Sheets. Formulir tetap tersimpan.');
+    }
+
+    const isConfirmed = Boolean(json.remoteConfirmed);
     const newRecord: SubsidiItem = {
       ...item,
       id,
@@ -305,36 +344,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       periodeId: item.periodeId || '',
       kategoriId: item.kategoriId || '',
       kategoriNama: item.kategoriNama || '',
-      syncStatus: 'synced',
+      syncStatus: isConfirmed ? ('synced' as const) : ('pending' as const),
     };
 
-    // Kirim langsung ke Google Sheets API terlebih dahulu
-    const res = await fetch('/api/subsidi', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newRecord),
-    });
-    const json = await res.json().catch(() => ({ success: false, error: 'Respon server tidak valid.' }));
-
-    if (res.status === 401) {
-      openPinModal();
-      throw new Error('Akses ditolak: Silakan masukkan PIN Bendahara terlebih dahulu.');
-    }
-
-    if (!res.ok || !json.success) {
-      throw new Error(json?.error || 'Gagal menyimpan subsidi ke Google Sheets. Formulir tetap tersimpan.');
-    }
-
-    // Google Sheets berhasil mengonfirmasi: tambahkan ke state & cache lokal
+    // Tambahkan ke state & cache lokal
     setSubsidi(prev => {
       const updated = [newRecord, ...prev.filter(s => String(s.id).trim() !== id)];
       saveToOfflineCache('subsidi', updated);
       return updated;
     });
 
-    showToast('Subsidi Berhasil Disimpan', 'Tersinkronisasi sempurna dengan Google Sheets.');
+    if (isConfirmed) {
+      showToast('Subsidi Berhasil Disimpan', 'Tersinkronisasi sempurna dengan Google Sheets.');
+    } else {
+      showToast('Subsidi Disimpan Sementara', 'Data tersimpan lokal, menunggu koneksi Google Sheets.', 'info');
+    }
     return newRecord;
-  }, [openPinModal, showToast]);
+  }, [showToast]);
 
   /**
    * 2. UPDATE SUBSIDI
@@ -353,14 +379,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const json = await res.json().catch(() => ({ success: false, error: 'Respon server tidak valid.' }));
 
     if (res.status === 401) {
-      openPinModal();
-      throw new Error('Akses ditolak: Silakan masukkan PIN Bendahara.');
+      setIsAdmin(false);
+      throw new Error('Sesi Anda telah berakhir. Silakan login kembali.');
     }
 
     if (!res.ok || !json.success) {
       throw new Error(json?.error || 'Gagal mengubah data subsidi di Google Sheets.');
     }
 
+    const isConfirmed = Boolean(json.remoteConfirmed ?? true);
     setSubsidi(prev => {
       const updated = prev.map(s => {
         if (String(s.id).trim() === targetId) {
@@ -369,7 +396,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             ...item,
             nominal: item.nominal !== undefined ? Number(item.nominal) : s.nominal,
             updatedAt: now,
-            syncStatus: 'synced',
+            syncStatus: (isConfirmed ? 'synced' : 'pending') as 'synced' | 'pending' | 'failed',
           };
         }
         return s;
@@ -378,9 +405,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       return updated;
     });
 
-    showToast('Subsidi Diperbarui', 'Perubahan tersinkron dengan Google Sheets.');
+    showToast('Subsidi Diperbarui', isConfirmed ? 'Perubahan tersinkron dengan Google Sheets.' : 'Perubahan tersimpan lokal.');
     return true;
-  }, [openPinModal, showToast]);
+  }, [showToast]);
 
   /**
    * 3. TAMBAH PENGELUARAN (Batch Multi-item, Remote Write Confirmation)
@@ -391,7 +418,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const now = new Date().toISOString();
     const eventId = 'EVT-' + Math.random().toString(36).substring(2, 9).toUpperCase();
 
-    const preparedItems: PengeluaranItem[] = items.map((it, idx) => {
+    const preparedItems = items.map((it, idx) => {
       const jumlah = Number(it.jumlah) || 1;
       const hargaSatuan = Number(it.hargaSatuan) || 0;
       const total = Number(it.total) || jumlah * hargaSatuan;
@@ -412,7 +439,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         periodeId: it.periodeId || '',
         kategoriId: it.kategoriId || '',
         kategoriNama: it.kategoriNama || '',
-        syncStatus: 'synced',
       };
     });
 
@@ -424,24 +450,34 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const json = await res.json().catch(() => ({ success: false, error: 'Respon server tidak valid.' }));
 
     if (res.status === 401) {
-      openPinModal();
-      throw new Error('Akses ditolak: Silakan masukkan PIN Bendahara terlebih dahulu.');
+      setIsAdmin(false);
+      throw new Error('Sesi Anda telah berakhir. Silakan login kembali.');
     }
 
     if (!res.ok || !json.success) {
       throw new Error(json?.error || 'Gagal menyimpan pengeluaran ke Google Sheets. Formulir tetap tersimpan.');
     }
 
-    // Google Sheets berhasil: simpan ke state lokal & cache
+    const isConfirmed = Boolean(json.remoteConfirmed);
+    const finalItems: PengeluaranItem[] = preparedItems.map(p => ({
+      ...p,
+      syncStatus: (isConfirmed ? 'synced' : 'pending') as 'synced' | 'pending' | 'failed',
+    }));
+
+    // Simpan ke state lokal & cache
     setPengeluaran(prev => {
-      const updated = [...preparedItems, ...prev];
+      const updated = [...finalItems, ...prev];
       saveToOfflineCache('pengeluaran', updated);
       return updated;
     });
 
-    showToast('Pengeluaran Berhasil Disimpan', 'Tersinkronisasi sempurna dengan Google Sheets.');
-    return preparedItems;
-  }, [openPinModal, showToast]);
+    if (isConfirmed) {
+      showToast('Pengeluaran Berhasil Disimpan', 'Tersinkronisasi sempurna dengan Google Sheets.');
+    } else {
+      showToast('Pengeluaran Disimpan Sementara', 'Data dicatat lokal, menunggu koneksi Google Sheets.', 'info');
+    }
+    return finalItems;
+  }, [showToast]);
 
   /**
    * 4. UPDATE PENGELUARAN
@@ -460,14 +496,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const json = await res.json().catch(() => ({ success: false, error: 'Respon server tidak valid.' }));
 
     if (res.status === 401) {
-      openPinModal();
-      throw new Error('Akses ditolak: Silakan masukkan PIN Bendahara.');
+      setIsAdmin(false);
+      throw new Error('Sesi Anda telah berakhir. Silakan login kembali.');
     }
 
     if (!res.ok || !json.success) {
       throw new Error(json?.error || 'Gagal mengubah data transaksi di Google Sheets.');
     }
 
+    const isConfirmed = Boolean(json.remoteConfirmed ?? true);
     setPengeluaran(prev => {
       const updated = prev.map(p => {
         if (String(p.id).trim() === targetId) {
@@ -481,7 +518,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             hargaSatuan,
             total,
             updatedAt: now,
-            syncStatus: 'synced',
+            syncStatus: (isConfirmed ? 'synced' : 'pending') as 'synced' | 'pending' | 'failed',
           };
         }
         return p;
@@ -490,9 +527,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       return updated;
     });
 
-    showToast('Transaksi Diperbarui', 'Perubahan tersinkron dengan Google Sheets.');
+    showToast('Transaksi Diperbarui', isConfirmed ? 'Perubahan tersinkron dengan Google Sheets.' : 'Perubahan tersimpan lokal.');
     return true;
-  }, [openPinModal, showToast]);
+  }, [showToast]);
 
   /**
    * 5. HAPUS DATA SENTRAL (Remote Confirmation Required)
@@ -518,8 +555,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const json = await res.json().catch(() => ({ success: false, error: 'Respon server tidak valid.' }));
 
     if (res.status === 401) {
-      openPinModal();
-      throw new Error('Akses ditolak: Silakan masukkan PIN Bendahara untuk menghapus data.');
+      setIsAdmin(false);
+      throw new Error('Sesi Anda telah berakhir. Silakan login kembali.');
     }
 
     if (!res.ok || !json.success) {
@@ -568,7 +605,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
 
     return true;
-  }, [openPinModal]);
+  }, []);
 
   const removeSubsidiLocally = useCallback((id: string) => {
     deleteRecord('subsidi', id).catch(() => {});
@@ -736,9 +773,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         toast,
         showToast,
         hideToast,
+        authLoading,
         isAdmin,
-        verifyAdminPin,
+        loginAdmin,
         logoutAdmin,
+        verifyAdminPin,
         openPinModal,
         closePinModal,
         isExpenseModalOpen,
@@ -757,17 +796,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         updatePengeluaranRecord,
       }}
     >
-      <AdminPinModal
-        isOpen={isPinModalOpen}
-        onClose={closePinModal}
-        onSuccess={() => {
-          if (pinSuccessCallbackRef.current) {
-            pinSuccessCallbackRef.current();
-            pinSuccessCallbackRef.current = null;
-          }
-        }}
-        onVerifyPin={verifyAdminPin}
-      />
       {children}
     </AppContext.Provider>
   );

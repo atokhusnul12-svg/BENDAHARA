@@ -5,6 +5,7 @@ import {
   createSessionToken,
   getClientIp,
   recordFailedAttempt,
+  validateLogin,
   validatePin,
   verifyAdminRequest,
 } from '@/lib/auth';
@@ -20,12 +21,14 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     success: true,
     authenticated: isAuth,
+    username: isAuth ? 'MMD' : null,
   });
 }
 
 /**
  * POST /api/auth
- * Login / verifikasi PIN Bendahara dengan Perlindungan Brute-Force & Rate Limiting
+ * Login Administrator dengan Username & Password (atau PIN)
+ * Proteksi Brute-Force & Rate Limiting IP
  */
 export async function POST(request: NextRequest) {
   const clientIp = getClientIp(request);
@@ -36,7 +39,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         success: false,
-        error: rateLimitStatus.error || 'Terlalu banyak percobaan PIN salah. Akses dikunci sementara.',
+        error: rateLimitStatus.error || 'Terlalu banyak percobaan gagal. Akses dikunci sementara.',
         lockedForSeconds: rateLimitStatus.lockedForSeconds,
       },
       { status: 429 } // HTTP 429 Too Many Requests
@@ -45,20 +48,27 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json().catch(() => ({}));
-    const pin = String(body.pin || '').trim();
+    const username = String(body.username || '').trim();
+    const password = String(body.password || body.pin || '').trim();
 
-    if (!pin) {
+    if (!username && !password) {
       return NextResponse.json(
-        { success: false, error: 'PIN Akses Bendahara wajib diisi.' },
+        { success: false, error: 'Username dan Password wajib diisi.' },
         { status: 400 }
       );
     }
 
-    // 2. Validasi PIN
-    const isValid = validatePin(pin);
+    // 2. Validasi Kredensial
+    let isValid = false;
+    if (username) {
+      isValid = validateLogin(username, password);
+    } else {
+      // Fallback PIN direct
+      isValid = validatePin(password) || validateLogin('MMD', password);
+    }
 
     if (!isValid) {
-      // Catat kegagalan dan tambahkan delay kecil untuk menggagalkan automated brute-force tools
+      // Catat kegagalan dan tambahkan delay kecil untuk mitigasi brute force
       const failInfo = recordFailedAttempt(clientIp);
       await new Promise(resolve => setTimeout(resolve, 600));
 
@@ -66,17 +76,21 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(
           {
             success: false,
-            error: 'Terlalu banyak percobaan PIN salah. Akses ditolak dan dikunci selama 15 menit.',
+            error: 'Terlalu banyak percobaan salah. Akses ditolak dan dikunci selama 15 menit.',
             lockedForSeconds: failInfo.lockedForSeconds,
           },
           { status: 429 }
         );
       }
 
+      const errMsg = username
+        ? `Username atau Password Bendahara salah. Sisa kesempatan: ${failInfo.remainingAttempts} kali.`
+        : `Kredensial Bendahara salah. Sisa kesempatan: ${failInfo.remainingAttempts} kali.`;
+
       return NextResponse.json(
         {
           success: false,
-          error: `PIN Bendahara salah. Sisa kesempatan: ${failInfo.remainingAttempts} kali sebelum dikunci.`,
+          error: errMsg,
           remainingAttempts: failInfo.remainingAttempts,
         },
         { status: 401 }
@@ -89,17 +103,18 @@ export async function POST(request: NextRequest) {
     const token = createSessionToken();
     const response = NextResponse.json({
       success: true,
-      message: 'Autentikasi Bendahara berhasil.',
+      message: 'Login Bendahara MMD berhasil.',
+      username: 'MMD',
       token,
     });
 
-    // Simpan ke cookie HttpOnly untuk keamanan maksimal
+    // Simpan ke cookie HttpOnly untuk keamanan maksimal (Sesi 8 jam)
     response.cookies.set('mmd_admin_session', token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       path: '/',
-      maxAge: 8 * 60 * 60, // Sesi 8 jam
+      maxAge: 8 * 60 * 60,
     });
 
     return response;

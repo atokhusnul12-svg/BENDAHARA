@@ -34,9 +34,11 @@ export default function ExpenseModal() {
     summary,
     pengeluaran,
     subsidi,
+    refreshData,
     addPengeluaranBatch,
     updatePengeluaranRecord,
   } = useApp();
+
 
 
   const [saving, setSaving] = useState(false);

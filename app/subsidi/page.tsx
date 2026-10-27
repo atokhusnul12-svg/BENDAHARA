@@ -229,9 +229,27 @@ export default function SubsidiPage() {
               </div>
 
               <div className="flex items-center gap-2 flex-shrink-0">
-                <span className="font-title-currency-md text-sm font-bold text-primary">
-                  + {formatRupiah(item.nominal)}
-                </span>
+                <div className="flex flex-col items-end">
+                  <span className="font-title-currency-md text-sm font-bold text-primary">
+                    + {formatRupiah(item.nominal)}
+                  </span>
+                  {item.syncStatus === 'synced' ? (
+                    <span className="text-[10px] text-emerald-700 font-semibold flex items-center gap-0.5">
+                      <span className="material-symbols-outlined text-[11px]">done_all</span>
+                      Tersinkron
+                    </span>
+                  ) : item.syncStatus === 'pending' ? (
+                    <span className="text-[10px] text-amber-700 font-semibold flex items-center gap-0.5">
+                      <span className="material-symbols-outlined text-[11px]">schedule</span>
+                      Menunggu Sinkron
+                    </span>
+                  ) : (
+                    <span className="text-[10px] text-rose-700 font-semibold flex items-center gap-0.5">
+                      <span className="material-symbols-outlined text-[11px]">error</span>
+                      Gagal
+                    </span>
+                  )}
+                </div>
                 <button
                   type="button"
                   onClick={() => openSubsidyModal(item)}

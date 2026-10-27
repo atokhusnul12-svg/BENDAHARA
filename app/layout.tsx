@@ -1,8 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { AppProvider } from '@/context/AppContext';
-import Header from '@/components/Header';
-import BottomNav from '@/components/BottomNav';
+import AppShell from '@/components/AppShell';
 import Toast from '@/components/Toast';
 import ExpenseModal from '@/components/ExpenseModal';
 import SubsidyModal from '@/components/SubsidyModal';
@@ -51,11 +50,9 @@ export default function RootLayout({
       </head>
       <body className="bg-surface font-body-md text-body-md text-on-surface antialiased flex flex-col min-h-screen">
         <AppProvider>
-          <Header />
-          <main className="flex-1 flex flex-col relative w-full max-w-[480px] mx-auto px-margin pt-16 pb-32 bg-surface">
+          <AppShell>
             {children}
-          </main>
-          <BottomNav />
+          </AppShell>
           <Toast />
           <ExpenseModal />
           <SubsidyModal />

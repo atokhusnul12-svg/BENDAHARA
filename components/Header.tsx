@@ -7,7 +7,7 @@ import { useApp } from '@/context/AppContext';
 export default function Header() {
   const pathname = usePathname();
   const router = useRouter();
-  const { syncStatus } = useApp();
+  const { syncStatus, logoutAdmin } = useApp();
 
   const getSubtitle = () => {
     if (pathname === '/laporan') return 'Laporan';
@@ -70,12 +70,23 @@ export default function Header() {
           </div>
         </div>
 
-        <div
-          className="flex items-center gap-space-xs flex-shrink-0"
-          title="Insignia Institusi MMD MIDA Sumbersari"
-          aria-label="Logo MIDA"
-        >
-          <div className="w-9 h-9 rounded-full bg-white p-1 flex items-center justify-center shadow-xs ring-1 ring-primary/20 overflow-hidden">
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <button
+            type="button"
+            onClick={logoutAdmin}
+            title="Keluar dari akun Bendahara MMD"
+            aria-label="Keluar"
+            className="h-8 px-2.5 rounded-lg border border-surface-container bg-surface-container-low hover:bg-error/10 hover:border-error/30 text-on-surface-variant hover:text-error text-[11px] font-bold flex items-center gap-1 active:scale-95 transition-all shadow-2xs"
+          >
+            <span className="material-symbols-outlined text-[16px]">logout</span>
+            <span>Keluar</span>
+          </button>
+
+          <div
+            className="w-9 h-9 rounded-full bg-white p-1 flex items-center justify-center shadow-xs ring-1 ring-primary/20 overflow-hidden"
+            title="Insignia Institusi MMD MIDA Sumbersari"
+            aria-label="Logo MIDA"
+          >
             <img
               alt="Logo MIDA"
               className="w-full h-full object-contain"

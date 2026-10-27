@@ -116,20 +116,28 @@ Bagi Anda yang pemula total dalam dunia coding, ikuti 4 langkah sederhana ini:
 3. Beri nama file di pojok kiri atas, contohnya: `Buku_Kas_MMD_1448H`.
 4. Salin URL spreadsheet dari address bar browser Anda (contoh: `https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5n.../edit`).
 
-### Langkah 2: Buka Apps Script
+### Langkah 2: Pasang Kode Apps Script
 1. Pada menu atas Google Sheets, klik **Ekstensi (Extensions)** > **Apps Script**.
 2. Editor kode Google Apps Script akan terbuka di tab baru.
-3. Hapus semua teks yang ada di file `Code.gs`.
+3. Hapus semua teks default yang ada di file `Code.gs`.
 4. Buka file `google-apps-script/Code.gs` dari folder project ini, salin seluruh kodenya, dan tempelkan (*paste*) ke editor Apps Script.
 5. Klik ikon **Simpan (Save / Ctrl+S)**.
 
-### Langkah 3: Deploy sebagai Aplikasi Web (Web App)
+### Langkah 3: Atur Script Properties (Keamanan Token & Spreadsheet ID)
+1. Di bilah menu sebelah kiri editor Apps Script, klik ikon gerigi ⚙️ (**Setelan Proyek / Project Settings**).
+2. Gulir ke bawah hingga bagian **Properti Skrip (Script Properties)**.
+3. Klik tombol **Tambahkan properti skrip (Add script property)** untuk memasukkan 2 properti berikut:
+   - **`MMD_API_TOKEN`**: Masukkan token rahasia integrasi Anda (misalnya: `mmd-amanah-kas-secret` atau token acak aman lainnya). *Token ini harus sama persis dengan `GOOGLE_SCRIPT_TOKEN` di backend.*
+   - **`SPREADSHEET_ID`**: Masukkan ID Spreadsheet kas Anda (rangkaian karakter unik di URL spreadsheet antara `/d/` dan `/edit`). *(Opsional jika Apps Script dibuka langsung dari spreadsheet kas).*
+4. Klik tombol **Simpan properti skrip (Save script properties)**.
+
+### Langkah 4: Deploy sebagai Aplikasi Web (Web App)
 1. Klik tombol warna biru **Deploy (Terapkan)** di pojok kanan atas, lalu pilih **New deployment (Penerapan baru)**.
 2. Klik ikon gerigi di sebelah *Select type*, pilih **Web app (Aplikasi Web)**.
 3. Atur konfigurasi berikut:
    - **Description**: `API Bendahara MMD`
    - **Execute as (Jalankan sebagai)**: `Me (email Anda)`
-   - **Who has access (Siapa yang memiliki akses)**: **`Anyone (Siapa saja)`** *(Wajib dipilih agar server aplikasi dapat berkomunikasi)*
+   - **Who has access (Siapa yang memiliki akses)**: **`Anyone (Siapa saja)`** *(Wajib dipilih agar server backend aplikasi dapat mengirim data)*
 4. Klik tombol **Deploy**.
 5. Google akan meminta izin akses (*Authorization Required*):
    - Klik **Review permissions (Tinjau izin)**.
@@ -139,16 +147,24 @@ Bagi Anda yang pemula total dalam dunia coding, ikuti 4 langkah sederhana ini:
 6. Setelah selesai, salin **Web App URL** yang berakhiran `/exec`.
    *(Contoh: `https://script.google.com/macros/s/AKfycb.../exec`)*
 
-### Langkah 4: Hubungkan ke Aplikasi Web
+### Langkah 5: Hubungkan ke Aplikasi Web (.env.local & Vercel)
 1. Di folder project, buka file `.env.local` menggunakan teks editor (Notepad atau VS Code).
-2. Tempelkan URL tadi pada baris `GOOGLE_SCRIPT_URL`:
+2. Pastikan 4 variabel environment utama telah terisi:
    ```env
+   # 1. URL Web App hasil deploy Apps Script
    GOOGLE_SCRIPT_URL=https://script.google.com/macros/s/AKfycb.../exec
+
+   # 2. Token integrasi server (harus sama persis dengan MMD_API_TOKEN di Apps Script)
    GOOGLE_SCRIPT_TOKEN=mmd-amanah-kas-secret
-   GOOGLE_SPREADSHEET_URL=https://docs.google.com/spreadsheets/d/ID_SPREADSHEET_ANDA/edit
+
+   # 3. PIN Rahasia Administrator / Bendahara (contoh: 144805)
+   ADMIN_PIN=144805
+
+   # 4. Kunci rahasia enkripsi sesi HMAC (string acak minimal 32 karakter)
+   ADMIN_SESSION_SECRET=mmd-local-secret-32-chars-session-salt-kediri
    ```
 3. Simpan file `.env.local`.
-4. Selesai! Buka halaman **Pengaturan** di aplikasi dan klik tombol **Uji Koneksi Google Sheets**. Sistem akan otomatis membuat tab dan menyinkronkan data secara langsung!
+4. Selesai! Buka halaman **Pengaturan** di aplikasi dan klik tombol **Uji Koneksi Google Sheets**. Sistem akan otomatis memverifikasi koneksi dan menyinkronkan data secara langsung!
 
 ---
 
@@ -296,9 +312,10 @@ d:/BENDAHARA MMD/
 1. Buat repositori baru di akun GitHub pribadi Anda dan unggah seluruh file project *(file `.env.local` akan otomatis diabaikan oleh `.gitignore` sehingga aman)*.
 2. Buka **[vercel.com](https://vercel.com)** dan masuk dengan akun GitHub Anda.
 3. Klik **Add New Project** lalu pilih repositori `bendahara-mmd`.
-4. Pada bagian **Environment Variables**, tambahkan variabel berikut:
-   - `GOOGLE_SCRIPT_URL`: URL Apps Script web app Anda
-   - `GOOGLE_SCRIPT_TOKEN`: `mmd-amanah-kas-secret`
-   - `GOOGLE_SPREADSHEET_URL`: Tautan Google Sheets Anda
+4. Pada bagian **Environment Variables**, tambahkan 4 variabel wajib berikut:
+   - `GOOGLE_SCRIPT_URL`: URL Web App Google Apps Script Anda (berakhiran `/exec`)
+   - `GOOGLE_SCRIPT_TOKEN`: Token rahasia integrasi (harus sama dengan `MMD_API_TOKEN` di Script Properties Google Apps Script)
+   - `ADMIN_PIN`: 6 digit PIN rahasia bendahara (contoh: `144805`)
+   - `ADMIN_SESSION_SECRET`: Kunci enkripsi sesi HMAC (string acak minimal 32 karakter)
 5. Klik tombol **Deploy**.
 6. Dalam hitungan detik, Web App Bendahara MMD Anda sudah online dan dapat diakses dari smartphone, tablet, maupun komputer di mana saja!

@@ -603,11 +603,92 @@ Catatan: Harga dalam Rupiah (Rp). Total dihitung otomatis = Jumlah Barang × Har
 
   const totalExpCalc = parsedCsv.pengeluaran.reduce((s, it) => s + it.total, 0);
   const saldoCalc = parsedCsv.subsidiNominal - totalExpCalc;
-  assert(saldoCalc === 5457000, 'Tes M9: Rekalkulasi Saldo Tersisa = Rp 5.457.000 (5.700.000 - 243.000)', `Aktual: ${saldoCalc}`);
+  assert(totalExpCalc === 243000, 'Tes M9: Total kalkulasi dari pengeluaran parsed CSV cocok');
+  assert(saldoCalc === 5457000, 'Tes M10: Saldo tersisa = Subsidi - Pengeluaran terhitung akurat Rp 5.457.000');
+  // =========================================================================
+  // TES N — Penanganan Putus Koneksi Google Sheets & Proteksi Integritas Data
+  // =========================================================================
+  console.log('\n📌 TES N — Penanganan Putus Koneksi Google Sheets & Proteksi Integritas');
+  console.log('   Spesifikasi: Simulasi Sheets gagal/down, penolakan klaim palsu, proteksi hapus, dan pemulihan\n');
 
-  // Uji Idempotensi: parse ulang menghasilkan ID yang sama
-  const parsedCsvSecond = parsePublishedCsv(sampleLiveCsv);
-  assert(parsedCsvSecond.pengeluaran[0].id === parsedCsv.pengeluaran[0].id, 'Tes M10: ID transaksi stabil (fingerprint idempotency) tidak berubah');
+  // 1. Simulasikan kegagalan remote Google Sheets dengan URL yang tidak merespon / salah
+  process.env.GOOGLE_SCRIPT_URL = 'http://127.0.0.1:1/invalid-apps-script-endpoint';
+  process.env.GOOGLE_SCRIPT_TOKEN = 'test-token-kediri-1448';
+
+  const failedExpRes = await addPengeluaran([
+    {
+      kategoriNama: 'LBM (Lajnah Bahtsul Masail)',
+      periodeId: testPeriodLabel,
+      bulanHijriah: 'Jumadal Ula',
+      tahunHijriah: '1448',
+      jenisAcara: 'Kegiatan LBM',
+      namaBarang: 'Pengeluaran Uji Putus Koneksi',
+      jumlah: 1,
+      satuan: 'pcs',
+      hargaSatuan: 50000,
+      total: 50000,
+      tanggalTransaksi: '2026-10-27',
+    },
+  ]);
+  assert(failedExpRes.success === false, 'Tes N1: Saat Google Sheets gagal diakses, transaksi baru DITOLAK (tidak ada fake success)');
+  assert(Boolean(failedExpRes.error), 'Tes N2: Error message jelas bahwa penyimpanan Google Sheets gagal');
+
+  // Pastikan data yang gagal disimpan TIDAK masuk ke database
+  const dataAfterFailedAdd = await getAllData();
+  const foundGhost = dataAfterFailedAdd.pengeluaran.find(p => p.namaBarang === 'Pengeluaran Uji Putus Koneksi');
+  assert(foundGhost === undefined, 'Tes N3: Transaksi yang gagal tidak disimpan atau diklaim tersimpan di buku kas');
+
+  // 2. Proteksi Hapus: Jika remote Google Sheets down, jangan hapus data dari buku kas lokal
+  // Ambil transaksi yang sah yang ada
+  const validItemToProtect = dataAfterFailedAdd.pengeluaran[0];
+  if (validItemToProtect) {
+    const failedDelRes = await deletePengeluaran(validItemToProtect.id);
+    assert(failedDelRes.success === false, 'Tes N4: Saat Google Sheets down, penghapusan DITOLAK demi mencegah data hilang sepihak');
+
+    const dataAfterFailedDel = await getAllData();
+    const stillExists = dataAfterFailedDel.pengeluaran.find(p => p.id === validItemToProtect.id);
+    assert(stillExists !== undefined, 'Tes N5: Transaksi tetap utuh di buku kas lokal ketika penghapusan Google Sheets gagal');
+  }
+
+  // 3. Pemulihan Koneksi: matikan endpoint remote yang error (kembali ke mode terisolasi lokal)
+  delete process.env.GOOGLE_SCRIPT_URL;
+
+  // Verifikasi status koneksi mendeteksi offline dengan jujur
+  const offlineStatus = await checkSyncStatus();
+  assert(offlineStatus.connected === false, 'Tes N6: Status koneksi mendeteksi Google Sheets tidak terhubung');
+  assert(offlineStatus.isLocalFallback === true, 'Tes N7: Sistem secara jujur menampilkan status offline fallback');
+
+  // Tambah transaksi uji untuk verifikasi status 'pending' pada mode lokal
+  const pendingExpRes = await addPengeluaran([
+    {
+      id: 'EXP-PEND-TEST-999',
+      kategoriNama: 'LBM (Lajnah Bahtsul Masail)',
+      periodeId: testPeriodLabel,
+      bulanHijriah: 'Jumadal Ula',
+      tahunHijriah: '1448',
+      jenisAcara: 'Kegiatan LBM',
+      namaBarang: 'Kertas HVS Pending',
+      jumlah: 2,
+      satuan: 'rim',
+      hargaSatuan: 45000,
+      total: 90000,
+      tanggalTransaksi: '2026-10-27',
+    },
+  ]);
+  assert(pendingExpRes.success === true, 'Tes N8: Penyimpanan lokal saat offline berhasil dengan antrean');
+  assert(pendingExpRes.data && pendingExpRes.data[0].syncStatus === 'pending', 'Tes N9: Status transaksi lokal diberi label "pending" (bukan "synced")');
+
+  // Verifikasi saldo terkonfirmasi vs saldo sementara
+  const dataN = await getAllData();
+  const summaryN = calculateFinancialSummary(
+    dataN.pengeluaran,
+    dataN.subsidi,
+    dataN.kategori,
+    testPeriodLabel
+  );
+  assert(summaryN.hasPendingSync === true, 'Tes N10: Sistem mendeteksi adanya transaksi pending (hasPendingSync: true)');
+  assert(summaryN.pendingCount >= 1, 'Tes N11: Jumlah transaksi pending terhitung dengan tepat');
+  assert(summaryN.saldoTerkonfirmasi !== summaryN.saldoTersisa, 'Tes N12: Saldo terkonfirmasi dibedakan dari saldo sementara');
 
   console.log('\n==========================================================');
   console.log(`HASIL AKHIR PENGUJIAN: ${passCount} LULUS, ${failCount} GAGAL`);

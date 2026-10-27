@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { syncFromPublishedCsv } from '@/lib/csv-importer';
 import { verifyAdminRequest } from '@/lib/auth';
-import { getAllData } from '@/lib/data-service';
+import { getAllData, reconcileCsvData } from '@/lib/data-service';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,6 +21,9 @@ export async function POST(request: NextRequest) {
         { status: 500 }
       );
     }
+
+    // Rekonsiliasi dan simpan ke database
+    await reconcileCsvData(syncResult.data);
 
     // Refresh database lokal
     const currentData = await getAllData();

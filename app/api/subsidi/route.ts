@@ -24,13 +24,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: result.error }, { status: 500 });
     }
 
-    const isGSheets = Boolean(process.env.GOOGLE_SCRIPT_URL?.trim());
+    const remoteConfirmed = Boolean(result.remoteConfirmed);
 
     return NextResponse.json({
       success: true,
-      message: isGSheets
+      remoteConfirmed,
+      message: remoteConfirmed
         ? 'Catatan penambahan subsidi berhasil disimpan ke Google Sheets.'
-        : 'Catatan penambahan subsidi berhasil disimpan ke penyimpanan lokal.',
+        : 'Catatan penambahan subsidi berhasil disimpan ke penyimpanan lokal (menunggu sinkronisasi).',
       data: result.data,
     });
   } catch (error: any) {

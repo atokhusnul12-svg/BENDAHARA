@@ -13,9 +13,11 @@ export default function SubsidyModal() {
     periode,
     selectedPeriode,
     showToast,
+    refreshData,
     addSubsidiRecord,
     updateSubsidiRecord,
   } = useApp();
+
 
 
   const [saving, setSaving] = useState(false);

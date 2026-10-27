@@ -2,13 +2,16 @@ import {
   AppDatabase,
   FinancialSummary,
   KategoriItem,
+  PengeluaranInput,
   PengeluaranItem,
   PeriodeItem,
+  SubsidiInput,
   SubsidiItem,
   SyncStatus,
 } from './types';
 import { calculateFinancialSummary } from './summary';
-import { syncFromPublishedCsv } from './csv-importer';
+import { syncFromPublishedCsv, CsvParsedResult } from './csv-importer';
+
 
 
 // Default Kategori Awal sesuai Permintaan User
@@ -97,8 +100,6 @@ let inMemoryDb: AppDatabase = {
   kategori: [...DEFAULT_KATEGORI],
   config: {
     spreadsheetUrl: process.env.GOOGLE_SPREADSHEET_URL || '',
-    scriptUrl: process.env.GOOGLE_SCRIPT_URL || '',
-    scriptToken: process.env.GOOGLE_SCRIPT_TOKEN || '',
   },
 };
 
@@ -143,8 +144,6 @@ export function resetToCleanState(): AppDatabase {
     kategori: [...DEFAULT_KATEGORI],
     config: {
       spreadsheetUrl: process.env.GOOGLE_SPREADSHEET_URL || '',
-      scriptUrl: process.env.GOOGLE_SCRIPT_URL || '',
-      scriptToken: process.env.GOOGLE_SCRIPT_TOKEN || '',
     },
   };
   if (!isServerlessOrProd()) {
@@ -264,7 +263,7 @@ async function callGoogleAppsScript(action: string, payloadData: any = {}): Prom
     return {
       success: false,
       isConfigured: false,
-      error: 'Variabel GOOGLE_SCRIPT_TOKEN belum disetel pada Environment Variables Vercel. Operasi ke Google Sheets ditolak demi keamanan.',
+      error: 'Variabel GOOGLE_SCRIPT_TOKEN belum disetel pada Environment Variables Vercel (.env.local). Pastikan nilainya sama dengan MMD_API_TOKEN pada Script Properties Google Apps Script. Operasi ke Google Sheets ditolak demi keamanan.',
     };
   }
 
@@ -354,6 +353,47 @@ export async function checkSyncStatus(): Promise<SyncStatus> {
 }
 
 /**
+ * Rekonsiliasi data dari CSV publik ke database lokal
+ */
+export async function reconcileCsvData(parsed: CsvParsedResult): Promise<void> {
+  const localDb = ensureLocalDb();
+
+  // 1. Rekonsiliasi Subsidi dari CSV
+  for (const sub of parsed.subsidi) {
+    const existIdx = localDb.subsidi.findIndex(s => s.id === sub.id);
+    if (existIdx >= 0) {
+      localDb.subsidi[existIdx] = { ...sub, syncStatus: 'synced' };
+    } else {
+      localDb.subsidi.push({ ...sub, syncStatus: 'synced' });
+    }
+  }
+
+  // 2. Rekonsiliasi Pengeluaran dari CSV
+  for (const exp of parsed.pengeluaran) {
+    const existIdx = localDb.pengeluaran.findIndex(p => p.id === exp.id);
+    if (existIdx >= 0) {
+      localDb.pengeluaran[existIdx] = { ...exp, syncStatus: 'synced' };
+    } else {
+      localDb.pengeluaran.push({ ...exp, syncStatus: 'synced' });
+    }
+  }
+
+  // 3. Pastikan periode dan kategori terdaftar
+  if (parsed.labelPeriode && !localDb.periode.some(p => p.labelPeriode.toLowerCase() === parsed.labelPeriode.toLowerCase())) {
+    localDb.periode.push({
+      id: parsed.periodeId,
+      namaBulanHijriah: parsed.bulanHijriah,
+      tahunHijriah: parsed.tahunHijriah,
+      labelPeriode: parsed.labelPeriode,
+      statusAktif: true,
+      createdAt: new Date().toISOString(),
+    });
+  }
+
+  persistLocalDb(localDb);
+}
+
+/**
  * Mengambil Seluruh Data (Sinkron dengan GSheets jika online, fallback lokal)
  */
 export async function getAllData(): Promise<{
@@ -366,14 +406,16 @@ export async function getAllData(): Promise<{
   const scriptUrl = process.env.GOOGLE_SCRIPT_URL?.trim();
   const localDb = ensureLocalDb();
 
-  // Jika data lokal masih kosong, ambil data awal dari Google Sheets CSV publik
+  // Bersihkan data dummy lama jika ada
+  localDb.pengeluaran = localDb.pengeluaran.filter(p => p.id !== 'EXP-mvpb01rl-1-eh8');
+  localDb.subsidi = localDb.subsidi.filter(s => s.id !== 'SUB-mvpazy62-2hrs');
+
+  // Jika data lokal masih kosong dari transaksi aktif, ambil data awal dari Google Sheets CSV publik
   if (localDb.pengeluaran.length === 0 && localDb.subsidi.length === 0 && !process.env.MMD_DISABLE_CSV_SYNC) {
     try {
       const csvResult = await syncFromPublishedCsv();
       if (csvResult.success && csvResult.data) {
-        localDb.pengeluaran = [...csvResult.data.pengeluaran];
-        localDb.subsidi = [...csvResult.data.subsidi];
-        saveLocalDb(localDb);
+        await reconcileCsvData(csvResult.data);
       }
     } catch (e) {}
   }
@@ -566,10 +608,11 @@ export function calculateSummary(
 
 
 /**
- * 1. Tambah Pengeluaran (Mendukung Batch Multi-item dari 1 acara)
+ * 1. Tambah Pengeluaran (Mendukung Batch Multi-item dari 1 acara & Idempotency Key)
  */
-export async function addPengeluaran(items: Omit<PengeluaranItem, 'id' | 'createdAt' | 'updatedAt'>[]): Promise<{
+export async function addPengeluaran(items: PengeluaranInput[]): Promise<{
   success: boolean;
+  remoteConfirmed?: boolean;
   data?: PengeluaranItem[];
   error?: string;
 }> {
@@ -577,6 +620,9 @@ export async function addPengeluaran(items: Omit<PengeluaranItem, 'id' | 'create
   const eventId = 'EVT-' + Math.random().toString(36).substring(2, 9).toUpperCase();
 
   const localDb = ensureLocalDb();
+  const scriptUrl = process.env.GOOGLE_SCRIPT_URL?.trim();
+  const isRemoteActive = Boolean(scriptUrl);
+
   const preparedItems: PengeluaranItem[] = items.map((item, index) => {
     const jumlah = Number(item.jumlah) || 1;
     const hargaSatuan = Number(item.hargaSatuan) || 0;
@@ -596,7 +642,7 @@ export async function addPengeluaran(items: Omit<PengeluaranItem, 'id' | 'create
       tanggalTransaksi: item.tanggalTransaksi || now.split('T')[0],
       periodeId: item.periodeId || '',
       bulanHijriah: item.bulanHijriah || '',
-      tahunHijriah: item.tahunHijriah || '',
+      tahunHijriah: item.tahunHijriah ? String(item.tahunHijriah) : '',
       kategoriId,
       kategoriNama,
       jenisAcara: item.jenisAcara || '',
@@ -606,15 +652,19 @@ export async function addPengeluaran(items: Omit<PengeluaranItem, 'id' | 'create
       hargaSatuan,
       total,
       catatan: item.catatan || '',
+      syncStatus: isRemoteActive ? ('synced' as const) : ('pending' as const),
     };
   });
 
-  // Jika terhubung dengan Google Apps Script, kirim ke sana
-  const scriptUrl = process.env.GOOGLE_SCRIPT_URL?.trim();
+  // Jika terhubung dengan Google Apps Script, simpan langsung ke Google Sheets
   if (scriptUrl) {
     const remote = await callGoogleAppsScript('createPengeluaran', { data: preparedItems });
     if (!remote.success) {
-      return { success: false, error: remote.error || 'Gagal menyimpan transaksi ke Google Sheets.' };
+      return {
+        success: false,
+        remoteConfirmed: false,
+        error: remote.error || 'Gagal menyimpan transaksi ke Google Sheets.',
+      };
     }
   }
 
@@ -629,7 +679,11 @@ export async function addPengeluaran(items: Omit<PengeluaranItem, 'id' | 'create
   }
   saveLocalDb(localDb);
 
-  return { success: true, data: preparedItems };
+  return {
+    success: true,
+    remoteConfirmed: isRemoteActive,
+    data: preparedItems,
+  };
 }
 
 /**
@@ -637,18 +691,17 @@ export async function addPengeluaran(items: Omit<PengeluaranItem, 'id' | 'create
  */
 export async function updatePengeluaran(item: Partial<PengeluaranItem> & { id: string }): Promise<{
   success: boolean;
+  remoteConfirmed?: boolean;
   error?: string;
 }> {
   if (!item.id) return { success: false, error: 'ID transaksi pengeluaran wajib ada.' };
 
   const scriptUrl = process.env.GOOGLE_SCRIPT_URL?.trim();
-  let remoteUpdated = false;
   if (scriptUrl) {
     const remote = await callGoogleAppsScript('updatePengeluaran', { data: item });
     if (!remote.success) {
       return { success: false, error: remote.error || 'Gagal memperbarui transaksi di Google Sheets.' };
     }
-    remoteUpdated = true;
   }
 
   const localDb = ensureLocalDb();
@@ -666,20 +719,21 @@ export async function updatePengeluaran(item: Partial<PengeluaranItem> & { id: s
       hargaSatuan,
       total,
       updatedAt: new Date().toISOString(),
+      syncStatus: scriptUrl ? 'synced' : 'pending',
     };
     saveLocalDb(localDb);
-    return { success: true };
+    return { success: true, remoteConfirmed: Boolean(scriptUrl) };
   }
 
-  if (remoteUpdated) {
-    return { success: true };
+  if (scriptUrl) {
+    return { success: true, remoteConfirmed: true };
   }
 
   return { success: false, error: 'Transaksi tidak ditemukan.' };
 }
 
 /**
- * 3. Hapus Pengeluaran
+ * 3. Hapus Pengeluaran (Strict Remote Deletion Protection)
  */
 export async function deletePengeluaran(id: string): Promise<{
   success: boolean;
@@ -691,6 +745,7 @@ export async function deletePengeluaran(id: string): Promise<{
 
   const scriptUrl = process.env.GOOGLE_SCRIPT_URL?.trim();
   let remoteDeleted = false;
+
   if (scriptUrl) {
     const remote = await callGoogleAppsScript('deletePengeluaran', { id: targetId });
     if (remote.success) {
@@ -702,6 +757,12 @@ export async function deletePengeluaran(id: string): Promise<{
       }).catch(() => null);
       if (fallback?.success) {
         remoteDeleted = true;
+      } else {
+        // Jangan hapus lokal jika remote Google Sheets gagal!
+        return {
+          success: false,
+          error: remote.error || 'Gagal menghapus transaksi dari Google Sheets. Data buku kas tetap dipertahankan.',
+        };
       }
     }
   }
@@ -725,8 +786,9 @@ export async function deletePengeluaran(id: string): Promise<{
 /**
  * 4. Tambah Subsidi
  */
-export async function addSubsidi(item: Omit<SubsidiItem, 'id' | 'createdAt' | 'updatedAt'>): Promise<{
+export async function addSubsidi(item: SubsidiInput): Promise<{
   success: boolean;
+  remoteConfirmed?: boolean;
   data?: SubsidiItem;
   error?: string;
 }> {
@@ -735,10 +797,12 @@ export async function addSubsidi(item: Omit<SubsidiItem, 'id' | 'createdAt' | 'u
   const matchedKat = localDb.kategori.find(k => matchCategory(item.kategoriNama, k) || matchCategory(item.kategoriId, k));
   const kategoriId = item.kategoriId || matchedKat?.id || '';
   const kategoriNama = matchedKat?.namaKategori || item.kategoriNama || '';
+  const scriptUrl = process.env.GOOGLE_SCRIPT_URL?.trim();
+  const isRemoteActive = Boolean(scriptUrl);
 
   const prepared: SubsidiItem = {
-    id: (item as any).id && String((item as any).id).trim()
-      ? String((item as any).id).trim()
+    id: item.id && String(item.id).trim()
+      ? String(item.id).trim()
       : 'SUB-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 6),
     createdAt: now,
     updatedAt: now,
@@ -750,13 +814,17 @@ export async function addSubsidi(item: Omit<SubsidiItem, 'id' | 'createdAt' | 'u
     kategoriNama,
     nominal: Number(item.nominal) || 0,
     catatan: item.catatan || '',
+    syncStatus: isRemoteActive ? ('synced' as const) : ('pending' as const),
   };
 
-  const scriptUrl = process.env.GOOGLE_SCRIPT_URL?.trim();
   if (scriptUrl) {
     const remote = await callGoogleAppsScript('createSubsidi', { data: prepared });
     if (!remote.success) {
-      return { success: false, error: remote.error || 'Gagal menyimpan subsidi ke Google Sheets.' };
+      return {
+        success: false,
+        remoteConfirmed: false,
+        error: remote.error || 'Gagal menyimpan subsidi ke Google Sheets.',
+      };
     }
   }
 
@@ -769,7 +837,11 @@ export async function addSubsidi(item: Omit<SubsidiItem, 'id' | 'createdAt' | 'u
   }
   saveLocalDb(localDb);
 
-  return { success: true, data: prepared };
+  return {
+    success: true,
+    remoteConfirmed: isRemoteActive,
+    data: prepared,
+  };
 }
 
 /**
@@ -777,18 +849,17 @@ export async function addSubsidi(item: Omit<SubsidiItem, 'id' | 'createdAt' | 'u
  */
 export async function updateSubsidi(item: Partial<SubsidiItem> & { id: string }): Promise<{
   success: boolean;
+  remoteConfirmed?: boolean;
   error?: string;
 }> {
   if (!item.id) return { success: false, error: 'ID subsidi wajib ada.' };
 
   const scriptUrl = process.env.GOOGLE_SCRIPT_URL?.trim();
-  let remoteUpdated = false;
   if (scriptUrl) {
     const remote = await callGoogleAppsScript('updateSubsidi', { data: item });
     if (!remote.success) {
       return { success: false, error: remote.error || 'Gagal mengubah subsidi di Google Sheets.' };
     }
-    remoteUpdated = true;
   }
 
   const localDb = ensureLocalDb();
@@ -800,20 +871,21 @@ export async function updateSubsidi(item: Partial<SubsidiItem> & { id: string })
       ...item,
       nominal: item.nominal !== undefined ? Number(item.nominal) : old.nominal,
       updatedAt: new Date().toISOString(),
+      syncStatus: scriptUrl ? 'synced' : 'pending',
     };
     saveLocalDb(localDb);
-    return { success: true };
+    return { success: true, remoteConfirmed: Boolean(scriptUrl) };
   }
 
-  if (remoteUpdated) {
-    return { success: true };
+  if (scriptUrl) {
+    return { success: true, remoteConfirmed: true };
   }
 
   return { success: false, error: 'Subsidi tidak ditemukan.' };
 }
 
 /**
- * 6. Hapus Subsidi
+ * 6. Hapus Subsidi (Strict Remote Deletion Protection)
  */
 export async function deleteSubsidi(id: string): Promise<{
   success: boolean;
@@ -825,6 +897,7 @@ export async function deleteSubsidi(id: string): Promise<{
 
   const scriptUrl = process.env.GOOGLE_SCRIPT_URL?.trim();
   let remoteDeleted = false;
+
   if (scriptUrl) {
     const remote = await callGoogleAppsScript('deleteSubsidi', { id: targetId });
     if (remote.success) {
@@ -836,6 +909,12 @@ export async function deleteSubsidi(id: string): Promise<{
       }).catch(() => null);
       if (fallback?.success) {
         remoteDeleted = true;
+      } else {
+        // Jangan hapus lokal jika remote Google Sheets gagal!
+        return {
+          success: false,
+          error: remote.error || 'Gagal menghapus subsidi dari Google Sheets. Data buku kas tetap dipertahankan.',
+        };
       }
     }
   }
@@ -855,6 +934,7 @@ export async function deleteSubsidi(id: string): Promise<{
 
   return { success: false, error: 'Catatan subsidi tidak ditemukan.' };
 }
+
 
 /**
  * 7. Tambah Periode (dengan Validasi Duplikat)

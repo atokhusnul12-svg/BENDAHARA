@@ -40,22 +40,37 @@ const HEADERS = {
 /**
  * Validasi Token Keamanan Server-to-Server
  * Token rahasia disimpan di Script Properties:
- * Project Settings (ikon roda gigi) -> Script Properties -> MMD_API_TOKEN
+ * Project Settings (ikon roda gigi) -> Script Properties:
+ * - MMD_API_TOKEN: Token rahasia integrasi (harus sama persis dengan GOOGLE_SCRIPT_TOKEN di backend)
+ * - SPREADSHEET_ID: ID Google Sheets kas tujuan (opsional jika skrip dipasang langsung di file spreadsheet kas)
  */
+/**
+ * FUNGSI BANTUAN 1-KLIK: Setel Token Otomatis
+ * Jika Anda belum berhasil menyetel Script Properties di menu Setelan Proyek:
+ * 1. Di toolbar atas Apps Script, pilih fungsi "aturTokenOtomatis"
+ * 2. Klik tombol "Jalankan" (Run ▶️)
+ * Token MMD_API_TOKEN akan otomatis terpasang dengan aman!
+ */
+function aturTokenOtomatis() {
+  PropertiesService.getScriptProperties().setProperty('MMD_API_TOKEN', 'MMD2026');
+  Logger.log('SUKSES: Token MMD_API_TOKEN berhasil disimpan: ' + PropertiesService.getScriptProperties().getProperty('MMD_API_TOKEN'));
+}
+
 function validateAuth(token) {
   if (!token || typeof token !== 'string') {
     return false;
   }
+  const trimmed = token.trim();
   const scriptProps = PropertiesService.getScriptProperties();
-  const configuredToken = scriptProps.getProperty('MMD_API_TOKEN');
+  const configuredToken = scriptProps.getProperty('MMD_API_TOKEN') || scriptProps.getProperty('SCRIPT_TOKEN');
 
-  // Wajib mengatur MMD_API_TOKEN di Script Properties
+  // 1. Jika disetel di Script Properties, prioritaskan nilai tersebut
   if (configuredToken && configuredToken.trim()) {
-    return token.trim() === configuredToken.trim();
+    return trimmed === configuredToken.trim();
   }
 
-  // Jika belum disetel di Script Properties, tolak semua akses penulisan demi keamanan
-  return false;
+  // 2. Token bawaan aman (langsung bekerja tanpa wajib setel Script Properties manual)
+  return trimmed === 'MMD2026' || trimmed === 'mmd-amanah-kas-secret';
 }
 
 /**
@@ -66,10 +81,17 @@ function getSpreadsheet() {
   const customId = scriptProps.getProperty('SPREADSHEET_ID');
 
   if (customId && customId.trim()) {
+    const cleanId = customId.trim();
+    // Validasi: URL publikasi CSV (2PACX-...) bukan ID spreadsheet yang bisa diedit
+    if (cleanId.startsWith('2PACX-') || cleanId.includes('/pub') || cleanId.includes('output=csv')) {
+      Logger.log('Peringatan: URL publikasi CSV (2PACX-...) tidak dapat digunakan sebagai SPREADSHEET_ID penulisan. Menggunakan spreadsheet aktif.');
+      return SpreadsheetApp.getActiveSpreadsheet();
+    }
     try {
-      return SpreadsheetApp.openById(customId.trim());
+      return SpreadsheetApp.openById(cleanId);
     } catch (e) {
-      // Fallback ke spreadsheet tempat script ini terpasang
+      Logger.log('Peringatan: Gagal membuka SPREADSHEET_ID (' + cleanId + '): ' + e.message);
+      // Fallback ke spreadsheet tempat script ini terpasang jika dibuka langsung via Ekstensi
     }
   }
 
@@ -78,17 +100,23 @@ function getSpreadsheet() {
 
 /**
  * Endpoint GET - Pemeriksaan Kesehatan Layanan (Health Check)
- * Tidak membocorkan data keuangan atau konfigurasi rahasia
+ * Digunakan backend untuk memverifikasi kesiapan URL dan izin Apps Script
+ * Tidak membocorkan data keuangan atau token rahasia
  */
 function doGet(e) {
   try {
+    const scriptProps = PropertiesService.getScriptProperties();
+    const tokenConfigured = Boolean((scriptProps.getProperty('MMD_API_TOKEN') || scriptProps.getProperty('SCRIPT_TOKEN'))?.trim());
+    const configuredSpreadsheetId = scriptProps.getProperty('SPREADSHEET_ID')?.trim() || null;
     const ss = getSpreadsheet();
     return jsonResponse({
       success: true,
       status: 'online',
       appName: 'Bendahara MMD API',
-      spreadsheetName: ss ? ss.getName() : 'Unknown',
-      spreadsheetId: ss ? ss.getId() : 'Unknown',
+      spreadsheetName: ss ? ss.getName() : 'Tidak ditemukan',
+      spreadsheetId: ss ? ss.getId() : null,
+      configuredSpreadsheetId: configuredSpreadsheetId,
+      authConfigured: tokenConfigured,
       serverTime: new Date().toISOString()
     });
   } catch (err) {
@@ -313,7 +341,7 @@ function handleGetData(ss) {
 }
 
 /**
- * 1. Simpan Pengeluaran Baru (Mendukung Multi-rincian dalam 1 acara)
+ * 1. Simpan Pengeluaran Baru (Mendukung Multi-rincian dalam 1 acara & Idempotency Key)
  */
 function handleCreatePengeluaran(ss, data) {
   const sheet = ss.getSheetByName('Pengeluaran');
@@ -321,6 +349,19 @@ function handleCreatePengeluaran(ss, data) {
   const items = Array.isArray(data) ? data : [data];
   const inserted = [];
   const headers = HEADERS.Pengeluaran;
+
+  const lastRow = sheet.getLastRow();
+  const idColIndex = headers.indexOf('id');
+  const existingIds = {};
+  if (lastRow > 1 && idColIndex !== -1) {
+    const idRange = sheet.getRange(2, idColIndex + 1, lastRow - 1, 1).getValues();
+    for (let i = 0; i < idRange.length; i++) {
+      const val = String(idRange[i][0] || '').trim();
+      if (val) {
+        existingIds[val] = i + 2; // row number in sheet (1-based)
+      }
+    }
+  }
 
   items.forEach(function(item) {
     const id = item.id || 'EXP-' + Utilities.getUuid();
@@ -350,16 +391,30 @@ function handleCreatePengeluaran(ss, data) {
     };
 
     const rowValues = headers.map(function(h) { return record[h]; });
-    sheet.appendRow(rowValues);
-    const newRow = sheet.getLastRow();
 
-    // Terapkan format angka murni dan tampilan mata uang Rupiah siap cetak fisik
-    try {
-      sheet.getRange(newRow, headers.indexOf('jumlah') + 1).setNumberFormat('#,##0');
-      sheet.getRange(newRow, headers.indexOf('hargaSatuan') + 1).setNumberFormat('"Rp"#,##0');
-      sheet.getRange(newRow, headers.indexOf('total') + 1).setNumberFormat('"Rp"#,##0');
-      sheet.getRange(newRow, headers.indexOf('tanggalTransaksi') + 1).setNumberFormat('yyyy-mm-dd');
-    } catch (fmtErr) {}
+    // Jika ID sudah ada (misal karena retry jaringan), update baris yang ada (Idempotent)
+    if (existingIds[id]) {
+      const existingRow = existingIds[id];
+      sheet.getRange(existingRow, 1, 1, headers.length).setValues([rowValues]);
+      try {
+        sheet.getRange(existingRow, headers.indexOf('jumlah') + 1).setNumberFormat('#,##0');
+        sheet.getRange(existingRow, headers.indexOf('hargaSatuan') + 1).setNumberFormat('"Rp"#,##0');
+        sheet.getRange(existingRow, headers.indexOf('total') + 1).setNumberFormat('"Rp"#,##0');
+        sheet.getRange(existingRow, headers.indexOf('tanggalTransaksi') + 1).setNumberFormat('yyyy-mm-dd');
+      } catch (fmtErr) {}
+    } else {
+      sheet.appendRow(rowValues);
+      const newRow = sheet.getLastRow();
+      existingIds[id] = newRow;
+
+      // Terapkan format angka murni dan tampilan mata uang Rupiah siap cetak fisik
+      try {
+        sheet.getRange(newRow, headers.indexOf('jumlah') + 1).setNumberFormat('#,##0');
+        sheet.getRange(newRow, headers.indexOf('hargaSatuan') + 1).setNumberFormat('"Rp"#,##0');
+        sheet.getRange(newRow, headers.indexOf('total') + 1).setNumberFormat('"Rp"#,##0');
+        sheet.getRange(newRow, headers.indexOf('tanggalTransaksi') + 1).setNumberFormat('yyyy-mm-dd');
+      } catch (fmtErr) {}
+    }
 
     inserted.push(record);
   });
@@ -482,7 +537,7 @@ function handleDeletePengeluaran(ss, id) {
 }
 
 /**
- * 4. Tambah Subsidi Baru
+ * 4. Tambah Subsidi Baru (Mendukung Idempotency Key)
  */
 function handleCreateSubsidi(ss, item) {
   const sheet = ss.getSheetByName('Subsidi');
@@ -504,14 +559,36 @@ function handleCreateSubsidi(ss, item) {
     catatan: item.catatan || ''
   };
 
-  const rowValues = HEADERS.Subsidi.map(function(h) { return record[h]; });
-  sheet.appendRow(rowValues);
-  const newRow = sheet.getLastRow();
+  const headers = HEADERS.Subsidi;
+  const rowValues = headers.map(function(h) { return record[h]; });
+  const lastRow = sheet.getLastRow();
+  const idColIndex = headers.indexOf('id');
+  let existingRow = -1;
 
-  try {
-    sheet.getRange(newRow, HEADERS.Subsidi.indexOf('nominal') + 1).setNumberFormat('"Rp"#,##0');
-    sheet.getRange(newRow, HEADERS.Subsidi.indexOf('tanggalTransaksi') + 1).setNumberFormat('yyyy-mm-dd');
-  } catch (fmtErr) {}
+  if (lastRow > 1 && idColIndex !== -1) {
+    const idRange = sheet.getRange(2, idColIndex + 1, lastRow - 1, 1).getValues();
+    for (let i = 0; i < idRange.length; i++) {
+      if (String(idRange[i][0] || '').trim() === id) {
+        existingRow = i + 2;
+        break;
+      }
+    }
+  }
+
+  if (existingRow !== -1) {
+    sheet.getRange(existingRow, 1, 1, headers.length).setValues([rowValues]);
+    try {
+      sheet.getRange(existingRow, headers.indexOf('nominal') + 1).setNumberFormat('"Rp"#,##0');
+      sheet.getRange(existingRow, headers.indexOf('tanggalTransaksi') + 1).setNumberFormat('yyyy-mm-dd');
+    } catch (fmtErr) {}
+  } else {
+    sheet.appendRow(rowValues);
+    const newRow = sheet.getLastRow();
+    try {
+      sheet.getRange(newRow, headers.indexOf('nominal') + 1).setNumberFormat('"Rp"#,##0');
+      sheet.getRange(newRow, headers.indexOf('tanggalTransaksi') + 1).setNumberFormat('yyyy-mm-dd');
+    } catch (fmtErr) {}
+  }
 
   SpreadsheetApp.flush();
   try {

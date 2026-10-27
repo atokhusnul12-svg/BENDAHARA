@@ -28,6 +28,7 @@ export interface SyncReconciliationStats {
 }
 
 export const DEFAULT_PUBLISHED_CSV_URL =
+  process.env.GOOGLE_SHEETS_CSV_URL?.trim() ||
   'https://docs.google.com/spreadsheets/d/e/2PACX-1vQNWBm5T4mWn0dvFjFZRJ-uQlTNzUzMUgvZlRfzbTiR1_qPcDXO_s4g0lJ3mcTpl4g9rj_BZhR1jbpe/pub?output=csv';
 
 /**

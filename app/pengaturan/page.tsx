@@ -17,7 +17,6 @@ export default function PengaturanPage() {
     setSelectedPeriode,
     deleteRecord,
     isAdmin,
-    openPinModal,
     logoutAdmin,
   } = useApp();
 
@@ -110,8 +109,7 @@ export default function PengaturanPage() {
       const json = await res.json();
 
       if (res.status === 401) {
-        openPinModal(() => handleSaveCategory());
-        throw new Error('Akses ditolak: Diperlukan PIN Bendahara.');
+        throw new Error('Sesi Anda telah berakhir. Silakan login kembali.');
       }
       if (!json.success) throw new Error(json.error);
 
@@ -141,8 +139,7 @@ export default function PengaturanPage() {
 
       const json = await res.json();
       if (res.status === 401) {
-        openPinModal(() => handleSavePeriod());
-        throw new Error('Akses ditolak: Diperlukan PIN Bendahara.');
+        throw new Error('Sesi Anda telah berakhir. Silakan login kembali.');
       }
       if (!json.success) throw new Error(json.error);
 
@@ -168,8 +165,7 @@ export default function PengaturanPage() {
       });
       const json = await res.json();
       if (res.status === 401) {
-        openPinModal(() => handleSetActivePeriod(p));
-        throw new Error('Akses ditolak: Diperlukan PIN Bendahara.');
+        throw new Error('Sesi Anda telah berakhir. Silakan login kembali.');
       }
       if (!json.success) throw new Error(json.error);
 
@@ -245,8 +241,7 @@ export default function PengaturanPage() {
       });
       const json = await res.json();
       if (res.status === 401) {
-        openPinModal(() => handleConfirmReset());
-        throw new Error('Akses ditolak: Diperlukan PIN Bendahara untuk mereset data.');
+        throw new Error('Sesi Anda telah berakhir. Silakan login kembali.');
       }
       if (!json.success) throw new Error(json.error || 'Gagal membersihkan data.');
 
@@ -269,10 +264,6 @@ export default function PengaturanPage() {
 
   // 4. Backup Handler
   const handleDownloadBackup = () => {
-    if (!isAdmin) {
-      openPinModal(() => window.open('/api/backup', '_blank'));
-      return;
-    }
     window.open('/api/backup', '_blank');
   };
 
@@ -308,37 +299,30 @@ export default function PengaturanPage() {
           </span>
         </div>
 
-        <div className="bg-surface-container-lowest rounded-xl p-space-lg shadow-sm border border-surface-container flex items-center justify-between gap-4">
+        <div className="bg-surface-container-lowest rounded-2xl p-space-lg shadow-sm border border-surface-container flex items-center justify-between gap-4">
           <div className="flex flex-col min-w-0">
-            <span className="font-headline-sm text-sm font-bold text-on-surface">
-              {isAdmin ? 'Sesi Bendahara Aktif' : 'Akses Terkunci (Mode Tamu)'}
-            </span>
-            <span className="font-body-sm text-xs text-on-surface-variant mt-0.5">
-              {isAdmin
-                ? 'Anda memiliki izin penuh untuk mencatat subsidi, pengeluaran, dan mengubah data kas.'
-                : 'Diperlukan PIN Bendahara untuk menyimpan, mengubah, atau menghapus data ke Google Sheets.'}
+            <div className="flex items-center gap-2">
+              <span className="font-headline-sm text-sm font-bold text-on-surface">
+                Akun Bendahara MMD
+              </span>
+              <span className="px-2 py-0.5 rounded-md bg-primary/10 text-primary font-mono text-[11px] font-bold">
+                MMD
+              </span>
+            </div>
+            <span className="font-body-sm text-xs text-on-surface-variant mt-1 leading-relaxed">
+              Sesi masuk aktif. Memiliki akses penuh untuk mencatat pengeluaran, subsidi, dan mengubah data kas tanpa kode akses.
             </span>
           </div>
 
-          {isAdmin ? (
-            <button
-              type="button"
-              onClick={logoutAdmin}
-              className="py-2 px-3.5 rounded-xl border border-error/30 text-error hover:bg-error/10 font-label-sm text-xs font-semibold active:scale-95 transition-all flex items-center gap-1 flex-shrink-0"
-            >
-              <span className="material-symbols-outlined text-[16px]">lock</span>
-              <span>Kunci Akses</span>
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={() => openPinModal()}
-              className="py-2 px-3.5 rounded-xl bg-primary text-on-primary hover:bg-primary/95 font-label-sm text-xs font-semibold active:scale-95 transition-all flex items-center gap-1 flex-shrink-0 shadow-xs"
-            >
-              <span className="material-symbols-outlined text-[16px]">key</span>
-              <span>Buka Kunci PIN</span>
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={logoutAdmin}
+            className="py-2.5 px-4 rounded-xl border border-error/30 text-error hover:bg-error/10 font-label-md text-xs font-bold active:scale-95 transition-all flex items-center gap-1.5 flex-shrink-0 shadow-xs"
+            title="Keluar dari sesi Bendahara"
+          >
+            <span className="material-symbols-outlined text-[18px]">logout</span>
+            <span>Keluar</span>
+          </button>
         </div>
       </section>
 
@@ -965,7 +949,20 @@ export default function PengaturanPage() {
               </div>
 
               <div className="bg-surface-container-low p-3 rounded-xl flex flex-col gap-1.5 border border-surface-container">
-                <span className="font-bold text-primary text-sm">Langkah 3: Deploy sebagai Web App</span>
+                <span className="font-bold text-primary text-sm">Langkah 3: Atur Script Properties (Token & ID)</span>
+                <p>
+                  1. Klik ikon gerigi ⚙️ (<strong>Setelan Proyek / Project Settings</strong>) di bilah kiri Apps Script.
+                  <br />
+                  2. Gulir ke <strong>Properti Skrip (Script Properties)</strong> &gt; klik <strong>Tambahkan properti skrip</strong>:
+                  <br />
+                  • <code>MMD_API_TOKEN</code>: masukkan token rahasia (contoh: <code>mmd-amanah-kas-secret</code>)
+                  <br />
+                  • <code>SPREADSHEET_ID</code>: ID spreadsheet kas Anda (opsional jika script dipasang di sheet kas)
+                </p>
+              </div>
+
+              <div className="bg-surface-container-low p-3 rounded-xl flex flex-col gap-1.5 border border-surface-container">
+                <span className="font-bold text-primary text-sm">Langkah 4: Deploy sebagai Web App</span>
                 <p>
                   1. Klik tombol <strong>Deploy</strong> (kanan atas) &gt; <strong>Penerapan baru (New deployment)</strong>.
                   <br />
@@ -984,12 +981,15 @@ export default function PengaturanPage() {
               </div>
 
               <div className="bg-surface-container-low p-3 rounded-xl flex flex-col gap-1.5 border border-surface-container">
-                <span className="font-bold text-primary text-sm">Langkah 4: Masukkan URL ke Aplikasi</span>
+                <span className="font-bold text-primary text-sm">Langkah 5: Masukkan Konfigurasi ke Backend</span>
                 <p>
-                  Buka file <code>.env.local</code> di folder project ini, lalu tempelkan URL tersebut pada baris:
+                  Buka file <code>.env.local</code> (atau Environment Variables di Vercel), lalu isi 4 variabel wajib:
                   <br />
                   <code className="block bg-surface-container-lowest p-1.5 rounded font-mono text-[11px] text-primary mt-1 border">
-                    GOOGLE_SCRIPT_URL=https://script.google.com/macros/s/XXX/exec
+                    GOOGLE_SCRIPT_URL=https://script.google.com/macros/s/XXX/exec<br />
+                    GOOGLE_SCRIPT_TOKEN=mmd-amanah-kas-secret<br />
+                    ADMIN_PIN=144805<br />
+                    ADMIN_SESSION_SECRET=string_acak_minimal_32_karakter
                   </code>
                 </p>
               </div>

@@ -86,6 +86,15 @@ export interface FinancialSummary {
   pendingCount: number;
 }
 
+export type PengeluaranInput = Omit<PengeluaranItem, 'id' | 'createdAt' | 'updatedAt' | 'eventId'> & {
+  id?: string;
+  eventId?: string;
+};
+
+export type SubsidiInput = Omit<SubsidiItem, 'id' | 'createdAt' | 'updatedAt'> & {
+  id?: string;
+};
+
 export interface AppDatabase {
   pengeluaran: PengeluaranItem[];
   subsidi: SubsidiItem[];
@@ -93,7 +102,6 @@ export interface AppDatabase {
   kategori: KategoriItem[];
   config?: {
     spreadsheetUrl?: string;
-    scriptUrl?: string;
-    scriptToken?: string;
   };
 }
+

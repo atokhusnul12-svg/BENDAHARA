@@ -326,6 +326,22 @@ export default function LaporanPage() {
                   <span className="text-[11px] text-on-surface-variant mt-0.5">
                     {formatTanggal(item.tanggalTransaksi)}
                   </span>
+                  {item.syncStatus === 'synced' ? (
+                    <span className="font-label-sm text-[10px] text-emerald-700 font-semibold flex items-center gap-0.5 mt-1">
+                      <span className="material-symbols-outlined text-[12px]">done_all</span>
+                      Tersinkron
+                    </span>
+                  ) : item.syncStatus === 'pending' ? (
+                    <span className="font-label-sm text-[10px] text-amber-700 font-semibold flex items-center gap-0.5 mt-1">
+                      <span className="material-symbols-outlined text-[12px]">schedule</span>
+                      Menunggu Sinkron
+                    </span>
+                  ) : (
+                    <span className="font-label-sm text-[10px] text-rose-700 font-semibold flex items-center gap-0.5 mt-1">
+                      <span className="material-symbols-outlined text-[12px]">error</span>
+                      Gagal Sinkron
+                    </span>
+                  )}
                 </div>
               </div>
 
