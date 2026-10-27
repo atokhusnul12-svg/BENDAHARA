@@ -371,6 +371,7 @@ export async function reconcileCsvData(parsed: CsvParsedResult): Promise<void> {
 
   // 1. Rekonsiliasi Subsidi dari CSV
   for (const sub of parsed.subsidi) {
+    if (pendingDeletedSubsidiIds.has(sub.id)) continue;
     const existIdx = localDb.subsidi.findIndex(s => s.id === sub.id);
     if (existIdx >= 0) {
       localDb.subsidi[existIdx] = { ...sub, syncStatus: 'synced' };
@@ -381,6 +382,7 @@ export async function reconcileCsvData(parsed: CsvParsedResult): Promise<void> {
 
   // 2. Rekonsiliasi Pengeluaran dari CSV
   for (const exp of parsed.pengeluaran) {
+    if (pendingDeletedPengeluaranIds.has(exp.id)) continue;
     const existIdx = localDb.pengeluaran.findIndex(p => p.id === exp.id);
     if (existIdx >= 0) {
       localDb.pengeluaran[existIdx] = { ...exp, syncStatus: 'synced' };
@@ -762,18 +764,33 @@ export async function deletePengeluaran(id: string): Promise<{
     if (remote.success) {
       remoteDeleted = true;
     } else {
-      // Soft-delete fallback jika Apps Script belum di-redeploy atau ID tidak cocok persis
-      const fallback = await callGoogleAppsScript('updatePengeluaran', {
-        data: { id: targetId, catatan: '[Dihapus] ' + targetId, namaBarang: '[Dihapus]', jumlah: 0, hargaSatuan: 0, total: 0 },
-      }).catch(() => null);
-      if (fallback?.success) {
+      const isRemoteNotFound =
+        remote.error &&
+        (remote.error.toLowerCase().includes('tidak ditemukan') ||
+         remote.error.toLowerCase().includes('not found') ||
+         remote.error.toLowerCase().includes('kosong'));
+
+      const isCsvOrLegacy =
+        targetId.startsWith('EXP-CSV-') || targetId.startsWith('EXP-LEGACY-');
+
+      if (isCsvOrLegacy || isRemoteNotFound) {
+        // Item berasal dari CSV publik / lembar fisik atau memang tidak tercatat di Google Sheets.
+        // Izinkan sukses agar data terhapus dari pembukuan kas & saldo kas langsung terhitung ulang!
         remoteDeleted = true;
       } else {
-        // Jangan hapus lokal jika remote Google Sheets gagal!
-        return {
-          success: false,
-          error: remote.error || 'Gagal menghapus transaksi dari Google Sheets. Data buku kas tetap dipertahankan.',
-        };
+        // Soft-delete fallback jika Apps Script belum di-redeploy atau ID tidak cocok persis
+        const fallback = await callGoogleAppsScript('updatePengeluaran', {
+          data: { id: targetId, catatan: '[Dihapus] ' + targetId, namaBarang: '[Dihapus]', jumlah: 0, hargaSatuan: 0, total: 0 },
+        }).catch(() => null);
+        if (fallback?.success) {
+          remoteDeleted = true;
+        } else {
+          // Jangan hapus lokal jika remote Google Sheets gagal karena jaringan / server error!
+          return {
+            success: false,
+            error: remote.error || 'Gagal menghapus transaksi dari Google Sheets. Data buku kas tetap dipertahankan.',
+          };
+        }
       }
     }
   }
@@ -914,18 +931,33 @@ export async function deleteSubsidi(id: string): Promise<{
     if (remote.success) {
       remoteDeleted = true;
     } else {
-      // Soft-delete fallback jika Apps Script belum di-redeploy atau ID tidak cocok persis
-      const fallback = await callGoogleAppsScript('updateSubsidi', {
-        data: { id: targetId, catatan: '[Dihapus] ' + targetId, nominal: 0 },
-      }).catch(() => null);
-      if (fallback?.success) {
+      const isRemoteNotFound =
+        remote.error &&
+        (remote.error.toLowerCase().includes('tidak ditemukan') ||
+         remote.error.toLowerCase().includes('not found') ||
+         remote.error.toLowerCase().includes('kosong'));
+
+      const isCsvOrLegacy =
+        targetId.startsWith('SUB-CSV-') || targetId.startsWith('SUB-LEGACY-');
+
+      if (isCsvOrLegacy || isRemoteNotFound) {
+        // Item berasal dari CSV publik / lembar fisik atau memang tidak tercatat di Google Sheets.
+        // Izinkan sukses agar data terhapus dari pembukuan kas & saldo kas langsung terhitung ulang!
         remoteDeleted = true;
       } else {
-        // Jangan hapus lokal jika remote Google Sheets gagal!
-        return {
-          success: false,
-          error: remote.error || 'Gagal menghapus subsidi dari Google Sheets. Data buku kas tetap dipertahankan.',
-        };
+        // Soft-delete fallback jika Apps Script belum di-redeploy atau ID tidak cocok persis
+        const fallback = await callGoogleAppsScript('updateSubsidi', {
+          data: { id: targetId, catatan: '[Dihapus] ' + targetId, nominal: 0 },
+        }).catch(() => null);
+        if (fallback?.success) {
+          remoteDeleted = true;
+        } else {
+          // Jangan hapus lokal jika remote Google Sheets gagal!
+          return {
+            success: false,
+            error: remote.error || 'Gagal menghapus subsidi dari Google Sheets. Data buku kas tetap dipertahankan.',
+          };
+        }
       }
     }
   }

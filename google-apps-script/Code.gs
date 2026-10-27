@@ -179,7 +179,7 @@ function doPost(e) {
         result = handleUpdatePengeluaran(ss, payload.data);
         break;
       case 'deletePengeluaran':
-        result = handleDeletePengeluaran(ss, payload.id);
+        result = handleDeletePengeluaran(ss, payload.id, payload);
         break;
       case 'createSubsidi':
         result = handleCreateSubsidi(ss, payload.data);
@@ -188,7 +188,7 @@ function doPost(e) {
         result = handleUpdateSubsidi(ss, payload.data);
         break;
       case 'deleteSubsidi':
-        result = handleDeleteSubsidi(ss, payload.id);
+        result = handleDeleteSubsidi(ss, payload.id, payload);
         break;
       case 'createPeriode':
         result = handleCreatePeriode(ss, payload.data);
@@ -532,8 +532,62 @@ function deleteRowById(ss, sheetName, id) {
 /**
  * 3. Hapus Pengeluaran
  */
-function handleDeletePengeluaran(ss, id) {
-  return deleteRowById(ss, 'Pengeluaran', id);
+function handleDeletePengeluaran(ss, id, payload) {
+  // 1. Coba hapus berdasarkan ID unik di sheet 'Pengeluaran'
+  const res = deleteRowById(ss, 'Pengeluaran', id);
+  if (res.success) return res;
+
+  // 2. Jika ID adalah item CSV publik (misal EXP-CSV-...) atau tidak tercatat di sheet master:
+  // Cari di seluruh sheet lain (seperti LBM) apakah terdapat baris yang sesuai untuk dihapus fisiknya
+  const targetId = String(id || '').trim().toLowerCase();
+  let searchWord = '';
+  if (targetId.startsWith('exp-csv-')) {
+    const parts = targetId.split('-');
+    if (parts.length >= 4) {
+      searchWord = parts.slice(3, -1).join('-').replace(/_/g, ' ').trim();
+    }
+  }
+
+  const allSheets = ss.getSheets();
+  for (let s = 0; s < allSheets.length; s++) {
+    const sh = allSheets[s];
+    const sName = sh.getName();
+    if (sName === 'Pengeluaran' || sName === 'Subsidi' || sName === 'Periode' || sName === 'Kategori') continue;
+
+    const lastRow = sh.getLastRow();
+    const lastCol = sh.getLastColumn();
+    if (lastRow <= 1 || lastCol < 2) continue;
+
+    const data = sh.getRange(1, 1, lastRow, lastCol).getValues();
+    for (let r = 0; r < data.length; r++) {
+      const row = data[r];
+      let matched = false;
+      for (let c = 0; c < row.length; c++) {
+        const val = String(row[c] || '').trim().toLowerCase();
+        if (
+          val === targetId ||
+          (searchWord && val === searchWord) ||
+          (searchWord && val.includes(searchWord) && searchWord.length >= 4)
+        ) {
+          matched = true;
+          break;
+        }
+      }
+      if (matched) {
+        sh.deleteRow(r + 1);
+        SpreadsheetApp.flush();
+        try {
+          var cache = CacheService.getScriptCache();
+          if (cache) cache.removeAll(['all_data', 'subsidi_data', 'pengeluaran_data', 'data']);
+        } catch (e) {}
+        return { success: true, message: 'Baris transaksi di sheet "' + sName + '" berhasil dihapus.', id: id };
+      }
+    }
+  }
+
+  // Jika tidak ditemukan di sheet manapun (karena sudah dihapus atau hanya ada di CSV publik),
+  // kembalikan sukses agar tidak memblokir pembukuan kas bendahara
+  return { success: true, message: 'Transaksi telah dibersihkan dari pencatatan.', id: id };
 }
 
 /**
@@ -656,8 +710,12 @@ function handleUpdateSubsidi(ss, item) {
 /**
  * 6. Hapus Subsidi
  */
-function handleDeleteSubsidi(ss, id) {
-  return deleteRowById(ss, 'Subsidi', id);
+function handleDeleteSubsidi(ss, id, payload) {
+  const res = deleteRowById(ss, 'Subsidi', id);
+  if (res.success) return res;
+
+  // Jika memang tidak ditemukan di Google Sheets (karena sudah dihapus atau hanya ada di CSV), kembalikan status bersih
+  return { success: true, message: 'Catatan subsidi telah dibersihkan dari pencatatan.', id: id };
 }
 
 /**
