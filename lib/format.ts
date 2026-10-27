@@ -3,7 +3,7 @@
  */
 
 export function formatRupiah(amount: number | string | undefined | null): string {
-  const num = typeof amount === 'string' ? parseFloat(amount) : amount;
+  const num = typeof amount === 'string' ? parseRupiah(amount) : amount;
   if (num === undefined || num === null || isNaN(num)) {
     return 'Rp 0';
   }
@@ -11,12 +11,13 @@ export function formatRupiah(amount: number | string | undefined | null): string
 }
 
 export function formatNumber(amount: number | string | undefined | null): string {
-  const num = typeof amount === 'string' ? parseFloat(amount) : amount;
+  const num = typeof amount === 'string' ? parseRupiah(amount) : amount;
   if (num === undefined || num === null || isNaN(num)) {
     return '0';
   }
   return Math.round(num).toLocaleString('id-ID');
 }
+
 
 export function parseRupiah(value: string | number | undefined | null): number {
   if (typeof value === 'number') return isNaN(value) ? 0 : value;

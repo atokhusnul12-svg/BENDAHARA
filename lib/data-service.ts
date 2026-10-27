@@ -7,6 +7,8 @@ import {
   SubsidiItem,
   SyncStatus,
 } from './types';
+import { calculateFinancialSummary } from './summary';
+
 
 // Default Kategori Awal sesuai Permintaan User
 const DEFAULT_KATEGORI: KategoriItem[] = [
@@ -527,82 +529,15 @@ export function calculateSummary(
   filterPeriodeLabel?: string,
   filterKategoriNama?: string
 ): FinancialSummary {
-  const isAllPeriods = !filterPeriodeLabel || filterPeriodeLabel === 'Semua' || filterPeriodeLabel === 'Semua Periode';
-  const isAllCategories = !filterKategoriNama || filterKategoriNama === 'Semua';
-
-  const matchPeriod = (item: { bulanHijriah?: string; tahunHijriah?: string; periodeId?: string }) => {
-    if (isAllPeriods) return true;
-    const target = filterPeriodeLabel?.trim().toLowerCase();
-    const label = `${item.bulanHijriah || ''} ${item.tahunHijriah || ''} H`.trim().toLowerCase();
-    const pid = (item.periodeId || '').trim().toLowerCase();
-    return label === target || pid === target;
-  };
-
-  // Filter berdasarkan periode
-  let filteredPengeluaran = pengeluaran.filter(matchPeriod);
-  let filteredSubsidi = subsidi.filter(matchPeriod);
-
-  // Filter opsional berdasarkan kategori tunggal
-  if (!isAllCategories) {
-    const dummyKat = { namaKategori: filterKategoriNama || '', id: filterKategoriNama || '' };
-    filteredPengeluaran = filteredPengeluaran.filter(
-      p => matchCategory(p.kategoriNama, dummyKat) || matchCategory(p.kategoriId, dummyKat)
-    );
-    filteredSubsidi = filteredSubsidi.filter(
-      s => matchCategory(s.kategoriNama, dummyKat) || matchCategory(s.kategoriId, dummyKat)
-    );
-  }
-
-  const totalPengeluaran = filteredPengeluaran.reduce((sum, item) => sum + (Number(item.total) || 0), 0);
-  const totalSubsidi = filteredSubsidi.reduce((sum, item) => sum + (Number(item.nominal) || 0), 0);
-  const saldoTersisa = totalSubsidi - totalPengeluaran;
-
-  const persentasePenggunaan = totalSubsidi > 0
-    ? Math.round((totalPengeluaran / totalSubsidi) * 1000) / 10
-    : 0;
-
-  // Breakdown per Kategori
-  const categorySummaries = kategoriList
-    .filter(k => k.statusAktif)
-    .map(kat => {
-      const katPengeluaran = pengeluaran.filter(p => {
-        const matchesPeriod = matchPeriod(p);
-        const matchesKat = matchCategory(p.kategoriNama, kat) || matchCategory(p.kategoriId, kat);
-        return matchesPeriod && matchesKat;
-      });
-
-      const katSubsidi = subsidi.filter(s => {
-        const matchesPeriod = matchPeriod(s);
-        const matchesKat = matchCategory(s.kategoriNama, kat) || matchCategory(s.kategoriId, kat);
-        return matchesPeriod && matchesKat;
-      });
-
-      const totalKeluar = katPengeluaran.reduce((sum, item) => sum + (Number(item.total) || 0), 0);
-      const totalSub = katSubsidi.reduce((sum, item) => sum + (Number(item.nominal) || 0), 0);
-      const sisa = totalSub - totalKeluar;
-      const pct = totalSub > 0 ? Math.round((totalKeluar / totalSub) * 1000) / 10 : 0;
-
-      return {
-        kategoriId: kat.id,
-        kategoriNama: kat.namaKategori,
-        totalSubsidi: totalSub,
-        totalPengeluaran: totalKeluar,
-        saldoTersisa: sisa,
-        persentasePenggunaan: pct,
-        jumlahTransaksi: katPengeluaran.length,
-      };
-    });
-
-  return {
-    periodeLabel: filterPeriodeLabel || 'Semua Periode',
-    totalSubsidi,
-    totalPengeluaran,
-    saldoTersisa,
-    persentasePenggunaan,
-    jumlahTransaksi: filteredPengeluaran.length,
-    categories: categorySummaries,
-  };
+  return calculateFinancialSummary(
+    pengeluaran,
+    subsidi,
+    kategoriList,
+    filterPeriodeLabel,
+    filterKategoriNama
+  );
 }
+
 
 /**
  * 1. Tambah Pengeluaran (Mendukung Batch Multi-item dari 1 acara)
