@@ -31,7 +31,7 @@ export default function Header() {
     : 'Status Koneksi: Memeriksa...';
 
   return (
-    <header className="fixed top-0 inset-x-0 z-50 bg-surface/85 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.04)] pt-safe no-print">
+    <header className="fixed top-0 inset-x-0 z-30 bg-surface/85 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.04)] pt-safe no-print">
       <div className="h-16 px-gutter flex items-center justify-between max-w-[480px] mx-auto w-full">
         <div className="flex items-center gap-space-sm min-w-0">
           {isSubPage ? (

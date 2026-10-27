@@ -331,12 +331,19 @@ function handlePing(ss) {
  * Handle Ambil Seluruh Data
  */
 function handleGetData(ss) {
-  return {
-    success: true,
+  var dataObj = {
     pengeluaran: getSheetObjects(ss, 'Pengeluaran'),
     subsidi: getSheetObjects(ss, 'Subsidi'),
     periode: getSheetObjects(ss, 'Periode'),
     kategori: getSheetObjects(ss, 'Kategori')
+  };
+  return {
+    success: true,
+    data: dataObj,
+    pengeluaran: dataObj.pengeluaran,
+    subsidi: dataObj.subsidi,
+    periode: dataObj.periode,
+    kategori: dataObj.kategori
   };
 }
 
@@ -754,6 +761,11 @@ function handleCreatePeriode(ss, item) {
 
   const rowValues = HEADERS.Periode.map(function(h) { return record[h]; });
   sheet.appendRow(rowValues);
+  SpreadsheetApp.flush();
+  try {
+    var cache = CacheService.getScriptCache();
+    if (cache) cache.removeAll(['all_data', 'subsidi_data', 'pengeluaran_data', 'data']);
+  } catch (e) {}
 
   return { success: true, data: record };
 }
@@ -780,6 +792,12 @@ function handleUpdatePeriode(ss, item) {
       if (item.tahunHijriah !== undefined) sheet.getRange(r + 1, headers.indexOf('tahunHijriah') + 1).setValue(item.tahunHijriah);
       if (item.labelPeriode !== undefined) sheet.getRange(r + 1, headers.indexOf('labelPeriode') + 1).setValue(item.labelPeriode);
       if (item.statusAktif !== undefined) sheet.getRange(r + 1, statusIdx + 1).setValue(item.statusAktif);
+
+      SpreadsheetApp.flush();
+      try {
+        var cache = CacheService.getScriptCache();
+        if (cache) cache.removeAll(['all_data', 'subsidi_data', 'pengeluaran_data', 'data']);
+      } catch (e) {}
 
       return { success: true, message: 'Periode berhasil diperbarui.' };
     }
@@ -828,6 +846,11 @@ function handleCreateKategori(ss, item) {
 
   const rowValues = HEADERS.Kategori.map(function(h) { return record[h]; });
   sheet.appendRow(rowValues);
+  SpreadsheetApp.flush();
+  try {
+    var cache = CacheService.getScriptCache();
+    if (cache) cache.removeAll(['all_data', 'subsidi_data', 'pengeluaran_data', 'data']);
+  } catch (e) {}
 
   return { success: true, data: record };
 }
@@ -853,6 +876,12 @@ function handleUpdateKategori(ss, item) {
       sheet.getRange(r + 1, headers.indexOf('updatedAt') + 1).setValue(now);
       if (item.namaKategori !== undefined) sheet.getRange(r + 1, headers.indexOf('namaKategori') + 1).setValue(item.namaKategori);
       if (item.statusAktif !== undefined) sheet.getRange(r + 1, headers.indexOf('statusAktif') + 1).setValue(item.statusAktif);
+
+      SpreadsheetApp.flush();
+      try {
+        var cache = CacheService.getScriptCache();
+        if (cache) cache.removeAll(['all_data', 'subsidi_data', 'pengeluaran_data', 'data']);
+      } catch (e) {}
 
       return { success: true, message: 'Kategori berhasil diperbarui.' };
     }

@@ -59,14 +59,25 @@ export default function ExpenseModal() {
   // Multi-item rows (supports single or multiple items in one event)
   const [items, setItems] = useState<ExpenseItemRow[]>([createDefaultRow()]);
 
-  // Keyboard shortcut Escape untuk menutup modal
+  // Keyboard shortcut Escape untuk menutup modal & body scroll lock
   useEffect(() => {
     if (!isExpenseModalOpen) return;
+
+    const originalOverflow = document.body.style.overflow;
+    const originalTouchAction = document.body.style.touchAction;
+    document.body.style.overflow = 'hidden';
+    document.body.style.touchAction = 'none';
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') closeExpenseModal();
     };
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      document.body.style.touchAction = originalTouchAction;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
   }, [isExpenseModalOpen, closeExpenseModal]);
 
   // Synchronize initial state when modal opens
@@ -307,11 +318,11 @@ export default function ExpenseModal() {
       onClick={(e) => {
         if (e.target === e.currentTarget) closeExpenseModal();
       }}
-      className="fixed inset-0 z-50 bg-inverse-surface/40 backdrop-blur-sm flex items-end justify-center sm:items-center p-0 sm:p-4 overflow-y-auto"
+      className="fixed inset-0 z-[100] bg-inverse-surface/40 backdrop-blur-sm flex items-end justify-center sm:items-center p-0 sm:p-4 overscroll-contain"
     >
-      <div className="w-full max-w-[480px] bg-surface-container-lowest rounded-t-2xl sm:rounded-2xl p-space-md shadow-2xl flex flex-col gap-space-md max-h-[92vh] overflow-y-auto animate-in slide-in-from-bottom duration-300">
+      <div className="w-full max-w-[480px] bg-surface-container-lowest rounded-t-3xl sm:rounded-2xl shadow-2xl flex flex-col max-h-[90dvh] sm:max-h-[88vh] overflow-hidden animate-in slide-in-from-bottom duration-300">
         {/* Header Modal */}
-        <div className="flex items-center justify-between pb-1 border-b border-surface-container">
+        <div className="flex items-center justify-between px-space-md py-space-sm border-b border-surface-container flex-shrink-0 bg-surface-container-lowest">
 
           <div className="flex items-center gap-2">
             <span
@@ -339,19 +350,21 @@ export default function ExpenseModal() {
           </button>
         </div>
 
-        {/* Error Alert if any */}
-        {errorMessage && (
-          <div className="bg-error-container text-on-error-container p-3 rounded-xl flex items-center gap-2 text-body-sm">
-            <span className="material-symbols-outlined text-[20px] text-error flex-shrink-0">
-              error
-            </span>
-            <span className="font-medium">{errorMessage}</span>
-          </div>
-        )}
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0 overflow-hidden">
+          {/* Scrollable Content Body */}
+          <div className="flex-1 overflow-y-auto overscroll-contain p-space-md flex flex-col gap-space-md">
+            {/* Error Alert if any */}
+            {errorMessage && (
+              <div className="bg-error-container text-on-error-container p-3 rounded-xl flex items-center gap-2 text-body-sm">
+                <span className="material-symbols-outlined text-[20px] text-error flex-shrink-0">
+                  error
+                </span>
+                <span className="font-medium">{errorMessage}</span>
+              </div>
+            )}
 
-        {/* Form Body */}
-        <form onSubmit={handleSubmit} className="flex flex-col gap-space-md">
-          {/* 1. Kategori Kegiatan */}
+            {/* 1. Kategori Kegiatan */}
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center justify-between">
               <label className="font-label-lg text-label-lg text-on-surface font-semibold">
@@ -684,35 +697,39 @@ export default function ExpenseModal() {
             />
           </div>
 
-          {/* Action Buttons */}
-          <div className="grid grid-cols-2 gap-space-sm pt-2">
-            <button
-              type="button"
-              onClick={closeExpenseModal}
-              disabled={saving}
-              className="h-12 rounded-xl bg-surface-container text-on-surface font-label-lg text-label-lg active:scale-95 transition-all font-semibold"
-            >
-              Batal
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="h-12 rounded-xl bg-primary text-on-primary font-label-lg text-label-lg shadow-md active:scale-95 transition-all flex items-center justify-center gap-2 font-semibold disabled:opacity-60"
-            >
-              {saving ? (
-                <>
-                  <span className="material-symbols-outlined text-[18px] animate-spin">
-                    progress_activity
-                  </span>
-                  <span>Menyimpan...</span>
-                </>
-              ) : (
-                <>
-                  <span className="material-symbols-outlined text-[18px]">save</span>
-                  <span>{expenseToEdit ? 'Simpan Perubahan' : 'Simpan Pengeluaran'}</span>
-                </>
-              )}
-            </button>
+          </div>
+
+          {/* Action Buttons Sticky Footer */}
+          <div className="p-space-md border-t border-surface-container flex-shrink-0 bg-surface-container-lowest pb-[max(1rem,env(safe-area-inset-bottom))]">
+            <div className="grid grid-cols-2 gap-space-sm">
+              <button
+                type="button"
+                onClick={closeExpenseModal}
+                disabled={saving}
+                className="h-12 rounded-xl bg-surface-container text-on-surface font-label-lg text-label-lg active:scale-95 transition-all font-semibold"
+              >
+                Batal
+              </button>
+              <button
+                type="submit"
+                disabled={saving}
+                className="h-12 rounded-xl bg-primary text-on-primary font-label-lg text-label-lg shadow-md active:scale-95 transition-all flex items-center justify-center gap-2 font-semibold disabled:opacity-60"
+              >
+                {saving ? (
+                  <>
+                    <span className="material-symbols-outlined text-[18px] animate-spin">
+                      progress_activity
+                    </span>
+                    <span>Menyimpan...</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined text-[18px]">save</span>
+                    <span>{expenseToEdit ? 'Simpan Perubahan' : 'Simpan Pengeluaran'}</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </form>
       </div>

@@ -59,6 +59,7 @@ interface AppContextType {
   updateSubsidiRecord: (item: Partial<SubsidiItem> & { id: string }) => Promise<boolean>;
   addPengeluaranBatch: (items: PengeluaranInput[]) => Promise<PengeluaranItem[]>;
   updatePengeluaranRecord: (item: Partial<PengeluaranItem> & { id: string }) => Promise<boolean>;
+  broadcastDataMutation: () => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -278,6 +279,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   /**
+   * Broadcast mutasi data ke tab lain / perangkat yang sama
+   */
+  const broadcastDataMutation = useCallback(() => {
+    if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+      try {
+        const channel = new BroadcastChannel('mmd_cross_device_sync');
+        channel.postMessage({ type: 'DATA_UPDATED', timestamp: Date.now() });
+        channel.close();
+      } catch (e) {}
+    }
+  }, []);
+
+  /**
    * Single Source of Truth Summary:
    * Selalu dihitung ulang secara sinkron dan otomatis dari state lokal aktif.
    * Menampilkan Saldo Terkonfirmasi (Google Sheets) & Saldo Sementara.
@@ -359,8 +373,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     } else {
       showToast('Subsidi Disimpan Sementara', 'Data tersimpan lokal, menunggu koneksi Google Sheets.', 'info');
     }
+    broadcastDataMutation();
     return newRecord;
-  }, [showToast]);
+  }, [showToast, broadcastDataMutation]);
 
   /**
    * 2. UPDATE SUBSIDI
@@ -406,8 +421,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
 
     showToast('Subsidi Diperbarui', isConfirmed ? 'Perubahan tersinkron dengan Google Sheets.' : 'Perubahan tersimpan lokal.');
+    broadcastDataMutation();
     return true;
-  }, [showToast]);
+  }, [showToast, broadcastDataMutation]);
 
   /**
    * 3. TAMBAH PENGELUARAN (Batch Multi-item, Remote Write Confirmation)
@@ -476,8 +492,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     } else {
       showToast('Pengeluaran Disimpan Sementara', 'Data dicatat lokal, menunggu koneksi Google Sheets.', 'info');
     }
+    broadcastDataMutation();
     return finalItems;
-  }, [showToast]);
+  }, [showToast, broadcastDataMutation]);
 
   /**
    * 4. UPDATE PENGELUARAN
@@ -528,8 +545,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
 
     showToast('Transaksi Diperbarui', isConfirmed ? 'Perubahan tersinkron dengan Google Sheets.' : 'Perubahan tersimpan lokal.');
+    broadcastDataMutation();
     return true;
-  }, [showToast]);
+  }, [showToast, broadcastDataMutation]);
 
   /**
    * 5. HAPUS DATA SENTRAL (Remote Confirmation Required)
@@ -604,8 +622,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       });
     }
 
+    broadcastDataMutation();
     return true;
-  }, []);
+  }, [broadcastDataMutation]);
 
   const removeSubsidiLocally = useCallback((id: string) => {
     deleteRecord('subsidi', id).catch(() => {});
@@ -692,11 +711,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           return merged;
         });
 
-        if (Array.isArray(json.data.periode) && json.data.periode.length > 0) {
+        if (Array.isArray(json.data.periode)) {
           setPeriode(json.data.periode);
           saveToOfflineCache('periode', json.data.periode);
         }
-        if (Array.isArray(json.data.kategori) && json.data.kategori.length > 0) {
+        if (Array.isArray(json.data.kategori)) {
           setKategori(json.data.kategori);
           saveToOfflineCache('kategori', json.data.kategori);
         }
@@ -733,6 +752,54 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     refreshDataRef.current = refreshData;
     refreshData();
+  }, [refreshData]);
+
+  // 1. Sinkronisasi antar-tab di browser / HP yang sama via BroadcastChannel
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('BroadcastChannel' in window)) return;
+    try {
+      const channel = new BroadcastChannel('mmd_cross_device_sync');
+      channel.onmessage = (event) => {
+        if (event.data?.type === 'DATA_UPDATED') {
+          refreshData();
+        }
+      };
+      return () => {
+        channel.close();
+      };
+    } catch (e) {}
+  }, [refreshData]);
+
+  // 2. Sinkronisasi otomatis saat pengguna membuka kembali tab / aplikasi HP (visibilitychange & focus)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        refreshData();
+      }
+    };
+    const handleFocus = () => {
+      refreshData();
+    };
+
+    window.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      window.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [refreshData]);
+
+  // 3. Polling latar belakang periodik setiap 20 detik saat layar aktif/terbuka
+  // Memastikan perubahan dari HP lain langsung terambil tanpa harus refresh manual
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        refreshData();
+      }
+    }, 20000);
+
+    return () => clearInterval(interval);
   }, [refreshData]);
 
   // Otomatis sinkronisasi ulang saat koneksi internet kembali pulih
@@ -794,6 +861,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         updateSubsidiRecord,
         addPengeluaranBatch,
         updatePengeluaranRecord,
+        broadcastDataMutation,
       }}
     >
       {children}

@@ -20,7 +20,7 @@ export default function Toast() {
   const iconName = isError ? 'error' : isInfo ? 'info' : 'check_circle';
 
   return (
-    <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 w-[90%] max-w-[420px] transition-all duration-300 transform translate-y-0 opacity-100 no-print">
+    <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[110] w-[90%] max-w-[420px] transition-all duration-300 transform translate-y-0 opacity-100 no-print">
       <div className={`${bgColor} px-margin py-space-sm rounded-xl shadow-xl flex items-center gap-space-sm`}>
         <span
           className="material-symbols-outlined text-[20px] text-primary-fixed flex-shrink-0"

@@ -53,6 +53,36 @@ export default function PengaturanPage() {
   // Modal Panduan Lengkap
   const [guideModalOpen, setGuideModalOpen] = useState(false);
 
+  // Kunci scrolling halaman latar ketika salah satu modal sedang terbuka
+  React.useEffect(() => {
+    const isAnyModalOpen =
+      categoryModalOpen ||
+      periodModalOpen ||
+      guideModalOpen ||
+      deletePeriodModalOpen ||
+      deleteCategoryModalOpen ||
+      resetModalOpen;
+
+    if (!isAnyModalOpen) return;
+
+    const originalOverflow = document.body.style.overflow;
+    const originalTouchAction = document.body.style.touchAction;
+    document.body.style.overflow = 'hidden';
+    document.body.style.touchAction = 'none';
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      document.body.style.touchAction = originalTouchAction;
+    };
+  }, [
+    categoryModalOpen,
+    periodModalOpen,
+    guideModalOpen,
+    deletePeriodModalOpen,
+    deleteCategoryModalOpen,
+    resetModalOpen,
+  ]);
+
   // 1. Test Connection Handler
   const handleTestConnection = async () => {
     setTestingSync(true);
@@ -712,74 +742,83 @@ export default function PengaturanPage() {
 
       {/* Modal Kelola Kategori */}
       {categoryModalOpen && (
-        <div className="fixed inset-0 z-50 bg-inverse-surface/40 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className="w-full max-w-[480px] bg-surface-container-lowest rounded-t-2xl sm:rounded-2xl p-space-lg shadow-2xl flex flex-col gap-space-md animate-in slide-in-from-bottom duration-300">
-            <div className="flex justify-between items-center">
+        <div className="fixed inset-0 z-[100] bg-inverse-surface/40 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 overscroll-contain">
+          <div className="w-full max-w-[480px] bg-surface-container-lowest rounded-t-3xl sm:rounded-2xl shadow-2xl flex flex-col max-h-[90dvh] sm:max-h-[85vh] overflow-hidden animate-in slide-in-from-bottom duration-300">
+            {/* Modal Header */}
+            <div className="flex justify-between items-center px-space-lg py-space-md border-b border-surface-container flex-shrink-0 bg-surface-container-lowest">
               <h3 className="font-headline-md text-headline-md text-on-surface font-bold">
                 {categoryToEdit ? 'Ubah Nama Kategori' : 'Tambah Kategori Baru'}
               </h3>
               <button
-                className="w-8 h-8 rounded-full bg-surface-container-low text-on-surface-variant flex items-center justify-center"
+                className="w-8 h-8 rounded-full bg-surface-container-low text-on-surface-variant flex items-center justify-center active:scale-95 transition-all"
                 onClick={() => setCategoryModalOpen(false)}
                 type="button"
+                aria-label="Tutup"
               >
                 <span className="material-symbols-outlined text-[18px]">close</span>
               </button>
             </div>
 
-            <div className="flex flex-col gap-space-xs">
-              <label className="font-label-sm text-label-sm text-on-surface-variant uppercase font-semibold">
-                Nama Kategori
-              </label>
-              <input
-                className="w-full h-12 px-space-md bg-surface-container-lowest text-on-surface rounded-xl outline-none ring-1 ring-outline-variant focus:ring-2 focus:ring-primary font-body-md text-body-md transition-shadow"
-                placeholder="Contoh: Takmir Masjid, Kitab Santri..."
-                type="text"
-                value={categoryNameInput}
-                onChange={e => setCategoryNameInput(e.target.value)}
-              />
-            </div>
-
-            <div className="flex items-center justify-between p-space-sm bg-surface-container-low rounded-xl">
-              <div className="flex flex-col">
-                <span className="font-label-md text-label-md text-on-surface font-semibold">
-                  Status Kategori
-                </span>
-                <span className="font-body-sm text-xs text-on-surface-variant">
-                  Tampilkan saat pencatatan transaksi
-                </span>
+            {/* Modal Scrollable Body */}
+            <div className="flex-1 overflow-y-auto overscroll-contain px-space-lg py-space-md flex flex-col gap-space-md">
+              <div className="flex flex-col gap-space-xs">
+                <label className="font-label-sm text-label-sm text-on-surface-variant uppercase font-semibold">
+                  Nama Kategori
+                </label>
+                <input
+                  className="w-full h-12 px-space-md bg-surface-container-lowest text-on-surface rounded-xl outline-none ring-1 ring-outline-variant focus:ring-2 focus:ring-primary font-body-md text-body-md transition-shadow"
+                  placeholder="Contoh: Takmir Masjid, Kitab Santri..."
+                  type="text"
+                  value={categoryNameInput}
+                  onChange={e => setCategoryNameInput(e.target.value)}
+                  autoFocus
+                />
               </div>
-              <button
-                className={`w-12 h-7 rounded-full relative flex items-center px-1 transition-colors ${
-                  categoryStatusInput ? 'bg-primary' : 'bg-surface-dim'
-                }`}
-                onClick={() => setCategoryStatusInput(!categoryStatusInput)}
-                type="button"
-              >
-                <span
-                  className={`w-5 h-5 rounded-full bg-white shadow-sm transform transition-transform ${
-                    categoryStatusInput ? 'translate-x-5' : 'translate-x-0'
+
+              <div className="flex items-center justify-between p-space-sm bg-surface-container-low rounded-xl">
+                <div className="flex flex-col">
+                  <span className="font-label-md text-label-md text-on-surface font-semibold">
+                    Status Kategori
+                  </span>
+                  <span className="font-body-sm text-xs text-on-surface-variant">
+                    Tampilkan saat pencatatan transaksi
+                  </span>
+                </div>
+                <button
+                  className={`w-12 h-7 rounded-full relative flex items-center px-1 transition-colors ${
+                    categoryStatusInput ? 'bg-primary' : 'bg-surface-dim'
                   }`}
-                ></span>
-              </button>
+                  onClick={() => setCategoryStatusInput(!categoryStatusInput)}
+                  type="button"
+                >
+                  <span
+                    className={`w-5 h-5 rounded-full bg-white shadow-sm transform transition-transform ${
+                      categoryStatusInput ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  ></span>
+                </button>
+              </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-space-sm pt-space-xs">
-              <button
-                className="h-11 rounded-xl bg-surface-container text-on-surface font-label-md text-label-md font-semibold active:scale-95"
-                onClick={() => setCategoryModalOpen(false)}
-                type="button"
-              >
-                Batal
-              </button>
-              <button
-                className="h-11 rounded-xl bg-primary text-on-primary font-label-md text-label-md font-semibold active:scale-95 shadow-sm disabled:opacity-50"
-                onClick={handleSaveCategory}
-                disabled={savingCategory}
-                type="button"
-              >
-                {savingCategory ? 'Menyimpan...' : 'Simpan Kategori'}
-              </button>
+            {/* Modal Sticky Footer */}
+            <div className="p-space-md sm:p-space-lg border-t border-surface-container flex-shrink-0 bg-surface-container-lowest pb-[max(1rem,env(safe-area-inset-bottom))]">
+              <div className="grid grid-cols-2 gap-space-sm">
+                <button
+                  className="h-11 rounded-xl bg-surface-container text-on-surface font-label-md text-label-md font-semibold active:scale-95 transition-transform"
+                  onClick={() => setCategoryModalOpen(false)}
+                  type="button"
+                >
+                  Batal
+                </button>
+                <button
+                  className="h-11 rounded-xl bg-primary text-on-primary font-label-md text-label-md font-semibold active:scale-95 shadow-sm disabled:opacity-50 transition-transform"
+                  onClick={handleSaveCategory}
+                  disabled={savingCategory}
+                  type="button"
+                >
+                  {savingCategory ? 'Menyimpan...' : 'Simpan Kategori'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -787,9 +826,10 @@ export default function PengaturanPage() {
 
       {/* Modal Tambah Periode Hijriyah */}
       {periodModalOpen && (
-        <div className="fixed inset-0 z-50 bg-inverse-surface/40 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className="w-full max-w-[480px] bg-surface-container-lowest rounded-t-2xl sm:rounded-2xl p-space-lg shadow-2xl flex flex-col gap-space-md animate-in slide-in-from-bottom duration-300">
-            <div className="flex justify-between items-center">
+        <div className="fixed inset-0 z-[100] bg-inverse-surface/40 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 overscroll-contain">
+          <div className="w-full max-w-[480px] bg-surface-container-lowest rounded-t-3xl sm:rounded-2xl shadow-2xl flex flex-col max-h-[90dvh] sm:max-h-[85vh] overflow-hidden animate-in slide-in-from-bottom duration-300">
+            {/* Header */}
+            <div className="flex justify-between items-center px-space-lg py-space-md border-b border-surface-container flex-shrink-0 bg-surface-container-lowest">
               <div className="flex items-center gap-2">
                 <span className="material-symbols-outlined text-primary text-[24px]">
                   calendar_add_on
@@ -799,105 +839,112 @@ export default function PengaturanPage() {
                 </h3>
               </div>
               <button
-                className="w-8 h-8 rounded-full bg-surface-container-low text-on-surface-variant flex items-center justify-center"
+                className="w-8 h-8 rounded-full bg-surface-container-low text-on-surface-variant flex items-center justify-center active:scale-95 transition-all"
                 onClick={() => setPeriodModalOpen(false)}
                 type="button"
+                aria-label="Tutup"
               >
                 <span className="material-symbols-outlined text-[18px]">close</span>
               </button>
             </div>
 
-            <p className="font-body-sm text-xs text-on-surface-variant">
-              Buka pembukuan kas baru untuk siklus kalender Hijriyah pesantren MMD.
-            </p>
+            {/* Scrollable Content */}
+            <div className="flex-1 overflow-y-auto overscroll-contain px-space-lg py-space-md flex flex-col gap-space-md">
+              <p className="font-body-sm text-xs text-on-surface-variant">
+                Buka pembukuan kas baru untuk siklus kalender Hijriyah pesantren MMD.
+              </p>
 
-            {/* Bulan Selector */}
-            <div className="flex flex-col gap-1">
-              <label className="font-label-sm text-label-sm text-on-surface font-semibold">
-                Bulan Hijriyah
-              </label>
-              <div className="relative w-full">
-                <select
-                  className="w-full h-11 bg-surface-container-low text-on-surface rounded-xl px-3 font-body-md text-body-md appearance-none pr-10 focus:outline-none border border-surface-container font-medium"
-                  value={selectedBulan}
-                  onChange={e => setSelectedBulan(e.target.value)}
-                >
-                  {BULAN_HIJRIAH_LIST.map(b => (
-                    <option key={b} value={b}>
-                      {b}
-                    </option>
-                  ))}
-                </select>
-                <span className="material-symbols-outlined text-[20px] text-on-surface-variant pointer-events-none absolute right-3 top-1/2 -translate-y-1/2">
-                  expand_more
-                </span>
-              </div>
-            </div>
-
-            {/* Tahun Stepper */}
-            <div className="flex flex-col gap-1">
-              <label className="font-label-sm text-label-sm text-on-surface font-semibold">
-                Tahun Hijriyah
-              </label>
-              <div className="flex items-center bg-surface-container-low rounded-xl p-1 justify-between border border-surface-container">
-                <button
-                  className="w-10 h-10 rounded-lg bg-surface-container-lowest text-on-surface flex items-center justify-center shadow-sm active:scale-90 transition-transform"
-                  onClick={() => setSelectedTahun(prev => Math.max(1400, prev - 1))}
-                  type="button"
-                >
-                  <span className="material-symbols-outlined text-[18px]">remove</span>
-                </button>
-                <div className="flex items-baseline gap-1">
-                  <input
-                    className="font-title-currency-md text-title-currency-md text-center font-bold text-on-surface bg-transparent w-20 focus:outline-none"
-                    type="number"
-                    value={selectedTahun}
-                    onChange={e => setSelectedTahun(parseInt(e.target.value, 10) || 1448)}
-                  />
-                  <span className="font-label-md text-label-md text-on-surface-variant font-semibold">
-                    H
+              {/* Bulan Selector */}
+              <div className="flex flex-col gap-1">
+                <label className="font-label-sm text-label-sm text-on-surface font-semibold">
+                  Bulan Hijriyah
+                </label>
+                <div className="relative w-full">
+                  <select
+                    className="w-full h-11 bg-surface-container-low text-on-surface rounded-xl px-3 font-body-md text-body-md appearance-none pr-10 focus:outline-none border border-surface-container font-medium"
+                    value={selectedBulan}
+                    onChange={e => setSelectedBulan(e.target.value)}
+                  >
+                    {BULAN_HIJRIAH_LIST.map(b => (
+                      <option key={b} value={b}>
+                        {b}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="material-symbols-outlined text-[20px] text-on-surface-variant pointer-events-none absolute right-3 top-1/2 -translate-y-1/2">
+                    expand_more
                   </span>
                 </div>
-                <button
-                  className="w-10 h-10 rounded-lg bg-surface-container-lowest text-on-surface flex items-center justify-center shadow-sm active:scale-90 transition-transform"
-                  onClick={() => setSelectedTahun(prev => prev + 1)}
-                  type="button"
-                >
-                  <span className="material-symbols-outlined text-[18px]">add</span>
-                </button>
+              </div>
+
+              {/* Tahun Stepper */}
+              <div className="flex flex-col gap-1">
+                <label className="font-label-sm text-label-sm text-on-surface font-semibold">
+                  Tahun Hijriyah
+                </label>
+                <div className="flex items-center bg-surface-container-low rounded-xl p-1 justify-between border border-surface-container">
+                  <button
+                    className="w-10 h-10 rounded-lg bg-surface-container-lowest text-on-surface flex items-center justify-center shadow-sm active:scale-90 transition-transform"
+                    onClick={() => setSelectedTahun(prev => Math.max(1400, prev - 1))}
+                    type="button"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">remove</span>
+                  </button>
+                  <div className="flex items-baseline gap-1">
+                    <input
+                      className="font-title-currency-md text-title-currency-md text-center font-bold text-on-surface bg-transparent w-20 focus:outline-none"
+                      type="number"
+                      value={selectedTahun}
+                      onChange={e => setSelectedTahun(parseInt(e.target.value, 10) || 1448)}
+                    />
+                    <span className="font-label-md text-label-md text-on-surface-variant font-semibold">
+                      H
+                    </span>
+                  </div>
+                  <button
+                    className="w-10 h-10 rounded-lg bg-surface-container-lowest text-on-surface flex items-center justify-center shadow-sm active:scale-90 transition-transform"
+                    onClick={() => setSelectedTahun(prev => prev + 1)}
+                    type="button"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">add</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Checkbox Jadikan Aktif */}
+              <div className="bg-surface-container-low p-3 rounded-xl flex items-center gap-2 cursor-pointer">
+                <input
+                  id="makeActive"
+                  type="checkbox"
+                  checked={periodStatusAktif}
+                  onChange={e => setPeriodStatusAktif(e.target.checked)}
+                  className="w-4 h-4 rounded text-primary focus:ring-0 accent-primary cursor-pointer"
+                />
+                <label htmlFor="makeActive" className="text-xs text-on-surface font-semibold cursor-pointer">
+                  Jadikan sebagai periode pembukuan aktif sekarang
+                </label>
               </div>
             </div>
 
-            {/* Checkbox Jadikan Aktif */}
-            <div className="bg-surface-container-low p-3 rounded-xl flex items-center gap-2 cursor-pointer">
-              <input
-                id="makeActive"
-                type="checkbox"
-                checked={periodStatusAktif}
-                onChange={e => setPeriodStatusAktif(e.target.checked)}
-                className="w-4 h-4 rounded text-primary focus:ring-0 accent-primary cursor-pointer"
-              />
-              <label htmlFor="makeActive" className="text-xs text-on-surface font-semibold cursor-pointer">
-                Jadikan sebagai periode pembukuan aktif sekarang
-              </label>
-            </div>
-
-            <div className="grid grid-cols-2 gap-space-sm pt-space-xs">
-              <button
-                className="h-11 rounded-xl bg-surface-container text-on-surface font-label-md text-label-md font-semibold active:scale-95"
-                onClick={() => setPeriodModalOpen(false)}
-                type="button"
-              >
-                Batal
-              </button>
-              <button
-                className="h-11 rounded-xl bg-primary text-on-primary font-label-md text-label-md font-semibold active:scale-95 shadow-sm disabled:opacity-50"
-                onClick={handleSavePeriod}
-                disabled={savingPeriod}
-                type="button"
-              >
-                {savingPeriod ? 'Menyimpan...' : 'Buat Periode'}
-              </button>
+            {/* Sticky Footer */}
+            <div className="p-space-md sm:p-space-lg border-t border-surface-container flex-shrink-0 bg-surface-container-lowest pb-[max(1rem,env(safe-area-inset-bottom))]">
+              <div className="grid grid-cols-2 gap-space-sm">
+                <button
+                  className="h-11 rounded-xl bg-surface-container text-on-surface font-label-md text-label-md font-semibold active:scale-95 transition-transform"
+                  onClick={() => setPeriodModalOpen(false)}
+                  type="button"
+                >
+                  Batal
+                </button>
+                <button
+                  className="h-11 rounded-xl bg-primary text-on-primary font-label-md text-label-md font-semibold active:scale-95 shadow-sm disabled:opacity-50 transition-transform"
+                  onClick={handleSavePeriod}
+                  disabled={savingPeriod}
+                  type="button"
+                >
+                  {savingPeriod ? 'Menyimpan...' : 'Buat Periode'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -905,9 +952,9 @@ export default function PengaturanPage() {
 
       {/* Modal Panduan Lengkap Pemula */}
       {guideModalOpen && (
-        <div className="fixed inset-0 z-50 bg-inverse-surface/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-[480px] bg-surface-container-lowest rounded-2xl p-space-lg shadow-2xl flex flex-col gap-space-md max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center pb-2 border-b border-surface-container">
+        <div className="fixed inset-0 z-[100] bg-inverse-surface/40 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 overscroll-contain">
+          <div className="w-full max-w-[480px] bg-surface-container-lowest rounded-t-3xl sm:rounded-2xl shadow-2xl flex flex-col max-h-[90dvh] sm:max-h-[85vh] overflow-hidden animate-in slide-in-from-bottom duration-300">
+            <div className="flex justify-between items-center px-space-lg py-space-md border-b border-surface-container flex-shrink-0 bg-surface-container-lowest">
               <div className="flex items-center gap-2">
                 <span className="material-symbols-outlined text-primary text-[24px]">menu_book</span>
                 <h3 className="font-headline-md text-headline-md text-on-surface font-bold">
@@ -915,15 +962,16 @@ export default function PengaturanPage() {
                 </h3>
               </div>
               <button
-                className="w-8 h-8 rounded-full bg-surface-container-low text-on-surface-variant flex items-center justify-center"
+                className="w-8 h-8 rounded-full bg-surface-container-low text-on-surface-variant flex items-center justify-center active:scale-95 transition-all"
                 onClick={() => setGuideModalOpen(false)}
                 type="button"
+                aria-label="Tutup"
               >
                 <span className="material-symbols-outlined text-[18px]">close</span>
               </button>
             </div>
 
-            <div className="flex flex-col gap-3 text-xs leading-relaxed text-on-surface-variant">
+            <div className="flex-1 overflow-y-auto overscroll-contain px-space-lg py-space-md flex flex-col gap-3 text-xs leading-relaxed text-on-surface-variant">
               <p className="text-on-surface font-semibold">
                 Ikuti langkah mudah berikut untuk menghubungkan Google Sheets Anda dengan aplikasi Bendahara MMD:
               </p>
@@ -1000,13 +1048,15 @@ export default function PengaturanPage() {
               </div>
             </div>
 
-            <button
-              onClick={() => setGuideModalOpen(false)}
-              className="w-full h-11 bg-primary text-on-primary rounded-xl font-label-md text-label-md font-semibold active:scale-95 shadow-sm mt-2"
-              type="button"
-            >
-              Saya Mengerti
-            </button>
+            <div className="p-space-md sm:p-space-lg border-t border-surface-container flex-shrink-0 bg-surface-container-lowest pb-[max(1rem,env(safe-area-inset-bottom))]">
+              <button
+                onClick={() => setGuideModalOpen(false)}
+                className="w-full h-11 bg-primary text-on-primary rounded-xl font-label-md text-label-md font-semibold active:scale-95 shadow-sm transition-transform"
+                type="button"
+              >
+                Saya Mengerti
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -21,11 +21,22 @@ export default function DeleteConfirmModal({
 }: DeleteConfirmModalProps) {
   React.useEffect(() => {
     if (!isOpen) return;
+
+    const originalOverflow = document.body.style.overflow;
+    const originalTouchAction = document.body.style.touchAction;
+    document.body.style.overflow = 'hidden';
+    document.body.style.touchAction = 'none';
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && !loading) onCancel();
     };
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      document.body.style.touchAction = originalTouchAction;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
   }, [isOpen, onCancel, loading]);
 
   if (!isOpen) return null;
@@ -35,9 +46,9 @@ export default function DeleteConfirmModal({
       onClick={(e) => {
         if (e.target === e.currentTarget && !loading) onCancel();
       }}
-      className="fixed inset-0 z-50 bg-inverse-surface/40 backdrop-blur-sm flex items-center justify-center p-4"
+      className="fixed inset-0 z-[100] bg-inverse-surface/40 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 overscroll-contain"
     >
-      <div className="w-full max-w-[400px] bg-surface-container-lowest rounded-2xl p-space-lg shadow-2xl flex flex-col gap-space-md animate-in zoom-in-95 duration-200">
+      <div className="w-full max-w-[420px] bg-surface-container-lowest rounded-t-3xl sm:rounded-2xl p-space-lg pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:pb-space-lg shadow-2xl flex flex-col gap-space-md animate-in slide-in-from-bottom sm:zoom-in-95 duration-200 max-h-[90dvh] overflow-y-auto">
 
         <div className="w-12 h-12 rounded-full bg-error-container/40 text-error flex items-center justify-center mx-auto">
           <span className="material-symbols-outlined text-[28px]">warning</span>

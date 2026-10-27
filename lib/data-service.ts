@@ -103,9 +103,11 @@ let inMemoryDb: AppDatabase = {
   },
 };
 
-// Set penanda ID subsidi & pengeluaran yang dihapus (mencegah resurrection dari Sheets sebelum sinkronisasi tuntas)
+// Set penanda ID yang dihapus (mencegah resurrection dari Sheets sebelum sinkronisasi tuntas)
 const pendingDeletedSubsidiIds = new Set<string>();
 const pendingDeletedPengeluaranIds = new Set<string>();
+const pendingDeletedKategoriIds = new Set<string>();
+const pendingDeletedPeriodeIds = new Set<string>();
 
 /**
  * Reset memory DB khusus untuk pengujian otomatis (test runner)
@@ -113,6 +115,8 @@ const pendingDeletedPengeluaranIds = new Set<string>();
 export function resetLocalDbForTesting(): void {
   pendingDeletedSubsidiIds.clear();
   pendingDeletedPengeluaranIds.clear();
+  pendingDeletedKategoriIds.clear();
+  pendingDeletedPeriodeIds.clear();
   inMemoryDb = {
     pengeluaran: [],
     subsidi: [],
@@ -137,6 +141,8 @@ export function resetLocalDbForTesting(): void {
 export function resetToCleanState(): AppDatabase {
   pendingDeletedSubsidiIds.clear();
   pendingDeletedPengeluaranIds.clear();
+  pendingDeletedKategoriIds.clear();
+  pendingDeletedPeriodeIds.clear();
   inMemoryDb = {
     pengeluaran: [],
     subsidi: [],
@@ -436,9 +442,16 @@ export async function getAllData(): Promise<{
   if (scriptUrl) {
     const remote = await callGoogleAppsScript('getData');
     if (remote.success) {
+      // Dukung respons Google Apps Script baik bentuk bersarang { data: { ... } } maupun rata { ... }
+      const rawData = remote.data && typeof remote.data === 'object' ? remote.data : remote;
+      const remotePengeluaran = Array.isArray(rawData.pengeluaran) ? rawData.pengeluaran : (Array.isArray(remote.pengeluaran) ? remote.pengeluaran : null);
+      const remoteSubsidi = Array.isArray(rawData.subsidi) ? rawData.subsidi : (Array.isArray(remote.subsidi) ? remote.subsidi : null);
+      const remotePeriode = Array.isArray(rawData.periode) ? rawData.periode : (Array.isArray(remote.periode) ? remote.periode : null);
+      const remoteKategori = Array.isArray(rawData.kategori) ? rawData.kategori : (Array.isArray(remote.kategori) ? remote.kategori : null);
+
       // Sinkronkan data dari Google Sheets ke penyimpanan lokal sebagai cache
-      if (Array.isArray(remote.pengeluaran)) {
-        localDb.pengeluaran = remote.pengeluaran
+      if (remotePengeluaran) {
+        localDb.pengeluaran = remotePengeluaran
           .filter((p: any) => {
             const pid = String(p.id || '').trim();
             const cat = String(p.catatan || '').toLowerCase();
@@ -465,8 +478,8 @@ export async function getAllData(): Promise<{
           }));
       }
 
-      if (Array.isArray(remote.subsidi)) {
-        localDb.subsidi = remote.subsidi
+      if (remoteSubsidi) {
+        localDb.subsidi = remoteSubsidi
           .filter((s: any) => {
             const sid = String(s.id || '').trim();
             const cat = String(s.catatan || '').toLowerCase();
@@ -491,11 +504,17 @@ export async function getAllData(): Promise<{
           }));
       }
 
-      if (Array.isArray(remote.periode)) {
-        const remotePers = remote.periode
+      if (remotePeriode) {
+        const remotePers = remotePeriode
           .filter((per: any) => {
             const label = String(per.labelPeriode || '').trim();
-            return !label.startsWith('[Dihapus]') && !label.toLowerCase().includes('tes');
+            const id = String(per.id || '').trim();
+            return (
+              !label.startsWith('[Dihapus]') &&
+              !label.toLowerCase().includes('tes periode') &&
+              id !== 'PER-TEST' &&
+              !pendingDeletedPeriodeIds.has(id)
+            );
           })
           .map((per: any) => ({
             ...per,
@@ -503,12 +522,18 @@ export async function getAllData(): Promise<{
             namaBulanHijriah: String(per.namaBulanHijriah || ''),
             tahunHijriah: String(per.tahunHijriah || ''),
             labelPeriode: String(per.labelPeriode || ''),
-            statusAktif: Boolean(per.statusAktif),
+            statusAktif:
+              per.statusAktif === true ||
+              per.statusAktif === 'TRUE' ||
+              per.statusAktif === 'true' ||
+              per.statusAktif === 1 ||
+              per.statusAktif === '1',
+            createdAt: String(per.createdAt || new Date().toISOString()),
           }));
 
         const mergedPeriode = [...remotePers];
         for (const defPer of DEFAULT_PERIODE) {
-          if (!mergedPeriode.some(p => p.labelPeriode.toLowerCase() === defPer.labelPeriode.toLowerCase())) {
+          if (!pendingDeletedPeriodeIds.has(defPer.id) && !mergedPeriode.some(p => p.labelPeriode.toLowerCase() === defPer.labelPeriode.toLowerCase())) {
             mergedPeriode.unshift(defPer);
             callGoogleAppsScript('createPeriode', { data: defPer }).catch(() => {});
           }
@@ -516,8 +541,8 @@ export async function getAllData(): Promise<{
         localDb.periode = mergedPeriode;
       }
 
-      if (Array.isArray(remote.kategori)) {
-        const remoteKats = remote.kategori
+      if (remoteKategori) {
+        const remoteKats = remoteKategori
           .filter((kat: any) => {
             const name = String(kat.namaKategori || '').trim();
             const id = String(kat.id || '').trim();
@@ -525,19 +550,27 @@ export async function getAllData(): Promise<{
               !name.startsWith('[Dihapus]') &&
               !name.toLowerCase().includes('tes kategori') &&
               id !== 'KAT-TEST' &&
-              kat.statusAktif !== false
+              !pendingDeletedKategoriIds.has(id)
             );
           })
           .map((kat: any) => ({
             ...kat,
             id: String(kat.id || ''),
             namaKategori: String(kat.namaKategori || ''),
-            statusAktif: kat.statusAktif !== undefined ? Boolean(kat.statusAktif) : true,
+            statusAktif:
+              kat.statusAktif === true ||
+              kat.statusAktif === 'TRUE' ||
+              kat.statusAktif === 'true' ||
+              kat.statusAktif === 1 ||
+              kat.statusAktif === '1',
+            createdAt: String(kat.createdAt || new Date().toISOString()),
+            updatedAt: String(kat.updatedAt || new Date().toISOString()),
+            iconName: String(kat.iconName || 'account_balance'),
           }));
 
         const mergedKategori = [...remoteKats];
         for (const defKat of DEFAULT_KATEGORI) {
-          if (!mergedKategori.some(k => matchCategory(k.namaKategori, defKat))) {
+          if (!pendingDeletedKategoriIds.has(defKat.id) && !mergedKategori.some(k => matchCategory(k.namaKategori, defKat))) {
             mergedKategori.unshift(defKat);
             callGoogleAppsScript('createKategori', { data: defKat }).catch(() => {});
           }
@@ -1095,6 +1128,7 @@ export async function deletePeriode(id: string): Promise<{ success: boolean; err
   }
 
   if (remoteDeleted || localDeleted) {
+    pendingDeletedPeriodeIds.add(id);
     return { success: true };
   }
 
@@ -1192,6 +1226,7 @@ export async function deleteKategori(id: string): Promise<{ success: boolean; er
   }
 
   if (remoteDeleted || localDeleted) {
+    pendingDeletedKategoriIds.add(id);
     return { success: true };
   }
 
