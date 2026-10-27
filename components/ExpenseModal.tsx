@@ -30,12 +30,14 @@ export default function ExpenseModal() {
     kategori,
     periode,
     selectedPeriode,
-    refreshData,
     showToast,
     summary,
     pengeluaran,
     subsidi,
+    addPengeluaranBatch,
+    updatePengeluaranRecord,
   } = useApp();
+
 
   const [saving, setSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -55,9 +57,20 @@ export default function ExpenseModal() {
   // Multi-item rows (supports single or multiple items in one event)
   const [items, setItems] = useState<ExpenseItemRow[]>([createDefaultRow()]);
 
+  // Keyboard shortcut Escape untuk menutup modal
+  useEffect(() => {
+    if (!isExpenseModalOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeExpenseModal();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isExpenseModalOpen, closeExpenseModal]);
+
   // Synchronize initial state when modal opens
   useEffect(() => {
     if (!isExpenseModalOpen) return;
+
 
     setErrorMessage('');
     setIsAddingCategory(false);
@@ -242,34 +255,22 @@ export default function ExpenseModal() {
       if (expenseToEdit && expenseToEdit.id) {
         // Mode Edit (Single Row)
         const singleItem = items[0];
-        const res = await fetch('/api/pengeluaran', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            id: expenseToEdit.id,
-            kategoriNama,
-            kategoriId: matchedKategori?.id || '',
-            bulanHijriah: bulanH,
-            tahunHijriah: tahunH,
-            periodeId,
-            tanggalTransaksi,
-            jenisAcara: jenisAcara.trim(),
-            namaBarang: singleItem.namaBarang.trim(),
-            jumlah: Number(singleItem.jumlah) || 1,
-            satuan: singleItem.satuan,
-            hargaSatuan: singleItem.hargaSatuan,
-            total: (Number(singleItem.jumlah) || 1) * singleItem.hargaSatuan,
-            catatan: catatan.trim(),
-          }),
+        await updatePengeluaranRecord({
+          id: expenseToEdit.id,
+          kategoriNama,
+          kategoriId: matchedKategori?.id || '',
+          bulanHijriah: bulanH,
+          tahunHijriah: tahunH,
+          periodeId,
+          tanggalTransaksi,
+          jenisAcara: jenisAcara.trim(),
+          namaBarang: singleItem.namaBarang.trim(),
+          jumlah: Number(singleItem.jumlah) || 1,
+          satuan: singleItem.satuan,
+          hargaSatuan: singleItem.hargaSatuan,
+          total: (Number(singleItem.jumlah) || 1) * singleItem.hargaSatuan,
+          catatan: catatan.trim(),
         });
-
-        const json = await res.json();
-        if (!json.success) {
-          throw new Error(json.error || 'Gagal mengubah transaksi pengeluaran.');
-        }
-
-        await refreshData();
-        showToast('Transaksi berhasil diperbarui', json.message || 'Tersimpan dengan sukses');
         closeExpenseModal();
       } else {
         // Mode Tambah Baru (Mendukung Multi-item batch)
@@ -289,19 +290,7 @@ export default function ExpenseModal() {
           catatan: catatan.trim(),
         }));
 
-        const res = await fetch('/api/pengeluaran', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ items: payloadItems }),
-        });
-
-        const json = await res.json();
-        if (!json.success) {
-          throw new Error(json.error || 'Gagal menyimpan transaksi ke Google Sheets.');
-        }
-
-        await refreshData();
-        showToast('Pengeluaran berhasil disimpan', json.message || 'Tersimpan dengan sukses');
+        await addPengeluaranBatch(payloadItems);
         closeExpenseModal();
       }
     } catch (err: any) {
@@ -312,10 +301,16 @@ export default function ExpenseModal() {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-inverse-surface/40 backdrop-blur-sm flex items-end justify-center sm:items-center p-0 sm:p-4 overflow-y-auto">
+    <div
+      onClick={(e) => {
+        if (e.target === e.currentTarget) closeExpenseModal();
+      }}
+      className="fixed inset-0 z-50 bg-inverse-surface/40 backdrop-blur-sm flex items-end justify-center sm:items-center p-0 sm:p-4 overflow-y-auto"
+    >
       <div className="w-full max-w-[480px] bg-surface-container-lowest rounded-t-2xl sm:rounded-2xl p-space-md shadow-2xl flex flex-col gap-space-md max-h-[92vh] overflow-y-auto animate-in slide-in-from-bottom duration-300">
         {/* Header Modal */}
         <div className="flex items-center justify-between pb-1 border-b border-surface-container">
+
           <div className="flex items-center gap-2">
             <span
               className="material-symbols-outlined text-primary text-[24px]"

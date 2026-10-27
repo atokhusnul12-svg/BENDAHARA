@@ -12,9 +12,11 @@ export default function SubsidyModal() {
     kategori,
     periode,
     selectedPeriode,
-    refreshData,
     showToast,
+    addSubsidiRecord,
+    updateSubsidiRecord,
   } = useApp();
+
 
   const [saving, setSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -118,49 +120,29 @@ export default function SubsidyModal() {
     setSaving(true);
     try {
       if (subsidyToEdit && subsidyToEdit.id) {
-        const res = await fetch('/api/subsidi', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            id: subsidyToEdit.id,
-            kategoriNama,
-            kategoriId: matchedKategori?.id || '',
-            bulanHijriah: bulanH,
-            tahunHijriah: tahunH,
-            periodeId,
-            tanggalTransaksi,
-            nominal: nominalNum,
-            catatan: catatan.trim(),
-          }),
+        await updateSubsidiRecord({
+          id: subsidyToEdit.id,
+          kategoriNama,
+          kategoriId: matchedKategori?.id || '',
+          bulanHijriah: bulanH,
+          tahunHijriah: tahunH,
+          periodeId,
+          tanggalTransaksi,
+          nominal: nominalNum,
+          catatan: catatan.trim(),
         });
-
-        const json = await res.json();
-        if (!json.success) throw new Error(json.error || 'Gagal mengubah catatan subsidi.');
-
-        await refreshData();
-        showToast('Catatan subsidi berhasil diubah', json.message || 'Perubahan subsidi tersimpan');
         closeSubsidyModal();
       } else {
-        const res = await fetch('/api/subsidi', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            kategoriNama,
-            kategoriId: matchedKategori?.id || '',
-            bulanHijriah: bulanH,
-            tahunHijriah: tahunH,
-            periodeId,
-            tanggalTransaksi,
-            nominal: nominalNum,
-            catatan: catatan.trim(),
-          }),
+        await addSubsidiRecord({
+          kategoriNama,
+          kategoriId: matchedKategori?.id || '',
+          bulanHijriah: bulanH,
+          tahunHijriah: tahunH,
+          periodeId,
+          tanggalTransaksi,
+          nominal: nominalNum,
+          catatan: catatan.trim(),
         });
-
-        const json = await res.json();
-        if (!json.success) throw new Error(json.error || 'Gagal menyimpan penambahan subsidi.');
-
-        await refreshData();
-        showToast('Subsidi berhasil ditambahkan', json.message || 'Subsidi kas berhasil tersimpan');
         closeSubsidyModal();
       }
     } catch (err: any) {
@@ -173,9 +155,15 @@ export default function SubsidyModal() {
   const isEditMode = Boolean(subsidyToEdit && subsidyToEdit.id);
 
   return (
-    <div className="fixed inset-0 z-50 bg-inverse-surface/40 backdrop-blur-sm flex items-end justify-center sm:items-center p-0 sm:p-4 overflow-y-auto">
+    <div
+      onClick={(e) => {
+        if (e.target === e.currentTarget) closeSubsidyModal();
+      }}
+      className="fixed inset-0 z-50 bg-inverse-surface/40 backdrop-blur-sm flex items-end justify-center sm:items-center p-0 sm:p-4 overflow-y-auto"
+    >
       <div className="w-full max-w-[480px] bg-surface-container-lowest rounded-t-2xl sm:rounded-2xl p-space-md shadow-2xl flex flex-col gap-space-md max-h-[92vh] overflow-y-auto animate-in slide-in-from-bottom duration-300">
         <div className="flex items-center justify-between pb-1 border-b border-surface-container">
+
           <div className="flex items-center gap-2">
             <span
               className="material-symbols-outlined text-primary text-[24px]"
