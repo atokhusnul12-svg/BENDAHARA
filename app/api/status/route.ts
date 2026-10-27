@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { checkSyncStatus } from '@/lib/data-service';
 
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+export const fetchCache = 'force-no-store';
 export const maxDuration = 30;
 
 const NO_CACHE_HEADERS = {

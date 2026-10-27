@@ -295,6 +295,7 @@ async function callGoogleAppsScript(action: string, payloadData: any = {}): Prom
         action,
         ...payloadData,
       }),
+      cache: 'no-store',
       // Apps Script Web Apps sering me-redirect (302) ke script.googleusercontent.com
       redirect: 'follow',
       // Timeout 25 detik agar Google Apps Script memiliki cukup waktu untuk cold start
@@ -450,16 +451,6 @@ export async function getAllData(): Promise<{
   // Bersihkan data dummy lama jika ada
   localDb.pengeluaran = localDb.pengeluaran.filter(p => p.id !== 'EXP-mvpb01rl-1-eh8');
   localDb.subsidi = localDb.subsidi.filter(s => s.id !== 'SUB-mvpazy62-2hrs');
-
-  // Jika data lokal masih kosong dari transaksi aktif, ambil data awal dari Google Sheets CSV publik
-  if (localDb.pengeluaran.length === 0 && localDb.subsidi.length === 0 && !process.env.MMD_DISABLE_CSV_SYNC) {
-    try {
-      const csvResult = await syncFromPublishedCsv();
-      if (csvResult.success && csvResult.data) {
-        await reconcileCsvData(csvResult.data);
-      }
-    } catch (e) {}
-  }
 
   if (scriptUrl) {
     const remote = await callGoogleAppsScript('getData');
@@ -622,7 +613,15 @@ export async function getAllData(): Promise<{
         },
       };
     } else {
-      // Remote call failed
+      // Remote call failed - jika data lokal kosong, coba pulihkan dari CSV publik
+      if (localDb.pengeluaran.length === 0 && localDb.subsidi.length === 0 && !process.env.MMD_DISABLE_CSV_SYNC) {
+        try {
+          const csvResult = await syncFromPublishedCsv();
+          if (csvResult.success && csvResult.data) {
+            await reconcileCsvData(csvResult.data);
+          }
+        } catch (e) {}
+      }
       return {
         pengeluaran: localDb.pengeluaran,
         subsidi: localDb.subsidi,
@@ -640,7 +639,16 @@ export async function getAllData(): Promise<{
     }
   }
 
-  // Gunakan data lokal
+  // Gunakan data lokal (belum dikonfigurasi remote)
+  if (localDb.pengeluaran.length === 0 && localDb.subsidi.length === 0 && !process.env.MMD_DISABLE_CSV_SYNC) {
+    try {
+      const csvResult = await syncFromPublishedCsv();
+      if (csvResult.success && csvResult.data) {
+        await reconcileCsvData(csvResult.data);
+      }
+    } catch (e) {}
+  }
+
   return {
     pengeluaran: localDb.pengeluaran,
     subsidi: localDb.subsidi,
