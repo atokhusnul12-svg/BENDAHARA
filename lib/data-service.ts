@@ -243,12 +243,32 @@ function persistLocalDb(db: AppDatabase): void {
 const ensureLocalDb = getLocalDb;
 const saveLocalDb = persistLocalDb;
 
+export const DEFAULT_GOOGLE_SCRIPT_URL =
+  'https://script.google.com/macros/s/AKfycbxdJDjy-OTY4DXnBpK_TeVcr4gkSEXJB7meLnC3WCDTHv09QibfpfwTfPANKsi62zAo/exec';
+export const DEFAULT_GOOGLE_SCRIPT_TOKEN = 'MMD2026';
+export const DEFAULT_GOOGLE_SPREADSHEET_ID = '1PAqCW-KV52-5X5GUn61tAhYst3kOd5TvJuHnRTQvfig';
+export const DEFAULT_GOOGLE_SPREADSHEET_URL =
+  'https://docs.google.com/spreadsheets/d/1PAqCW-KV52-5X5GUn61tAhYst3kOd5TvJuHnRTQvfig/edit';
+
+export function getEffectiveScriptConfig(): { url?: string; token?: string } {
+  // Jika pengujian terisolasi aktif (test suite), jangan gunakan remote Google Sheets
+  if (process.env.MMD_DISABLE_CSV_SYNC === 'true') {
+    return {
+      url: process.env.GOOGLE_SCRIPT_URL?.trim() || undefined,
+      token: process.env.GOOGLE_SCRIPT_TOKEN?.trim() || undefined,
+    };
+  }
+
+  const url = process.env.GOOGLE_SCRIPT_URL?.trim() || DEFAULT_GOOGLE_SCRIPT_URL;
+  const token = process.env.GOOGLE_SCRIPT_TOKEN?.trim() || DEFAULT_GOOGLE_SCRIPT_TOKEN;
+  return { url, token };
+}
+
 /**
  * Panggil Google Apps Script via HTTP POST
  */
 async function callGoogleAppsScript(action: string, payloadData: any = {}): Promise<any> {
-  const scriptUrl = process.env.GOOGLE_SCRIPT_URL?.trim();
-  const token = process.env.GOOGLE_SCRIPT_TOKEN?.trim();
+  const { url: scriptUrl, token } = getEffectiveScriptConfig();
 
   if (!scriptUrl || scriptUrl.length < 10) {
     return {
@@ -258,16 +278,7 @@ async function callGoogleAppsScript(action: string, payloadData: any = {}): Prom
     };
   }
 
-  // Pada lingkungan produksi, tolak jika token integrasi belum disetel
-  if (process.env.NODE_ENV === 'production' && (!token || token.length < 8)) {
-    return {
-      success: false,
-      isConfigured: false,
-      error: 'Variabel GOOGLE_SCRIPT_TOKEN belum disetel pada Environment Variables Vercel (.env.local). Pastikan nilainya sama dengan MMD_API_TOKEN pada Script Properties Google Apps Script. Operasi ke Google Sheets ditolak demi keamanan.',
-    };
-  }
-
-  const effectiveToken = token || 'dev-token-local';
+  const effectiveToken = token || DEFAULT_GOOGLE_SCRIPT_TOKEN;
 
   try {
     const response = await fetch(scriptUrl, {
@@ -316,7 +327,7 @@ async function callGoogleAppsScript(action: string, payloadData: any = {}): Prom
  * Cek Status Koneksi Google Sheets
  */
 export async function checkSyncStatus(): Promise<SyncStatus> {
-  const scriptUrl = process.env.GOOGLE_SCRIPT_URL?.trim();
+  const scriptUrl = getEffectiveScriptConfig().url;
   const spreadsheetUrl = process.env.GOOGLE_SPREADSHEET_URL?.trim() || '';
   const now = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });
 
@@ -403,7 +414,7 @@ export async function getAllData(): Promise<{
   kategori: KategoriItem[];
   syncStatus: SyncStatus;
 }> {
-  const scriptUrl = process.env.GOOGLE_SCRIPT_URL?.trim();
+  const scriptUrl = getEffectiveScriptConfig().url;
   const localDb = ensureLocalDb();
 
   // Bersihkan data dummy lama jika ada
@@ -620,7 +631,7 @@ export async function addPengeluaran(items: PengeluaranInput[]): Promise<{
   const eventId = 'EVT-' + Math.random().toString(36).substring(2, 9).toUpperCase();
 
   const localDb = ensureLocalDb();
-  const scriptUrl = process.env.GOOGLE_SCRIPT_URL?.trim();
+  const scriptUrl = getEffectiveScriptConfig().url;
   const isRemoteActive = Boolean(scriptUrl);
 
   const preparedItems: PengeluaranItem[] = items.map((item, index) => {
@@ -696,7 +707,7 @@ export async function updatePengeluaran(item: Partial<PengeluaranItem> & { id: s
 }> {
   if (!item.id) return { success: false, error: 'ID transaksi pengeluaran wajib ada.' };
 
-  const scriptUrl = process.env.GOOGLE_SCRIPT_URL?.trim();
+  const scriptUrl = getEffectiveScriptConfig().url;
   if (scriptUrl) {
     const remote = await callGoogleAppsScript('updatePengeluaran', { data: item });
     if (!remote.success) {
@@ -743,7 +754,7 @@ export async function deletePengeluaran(id: string): Promise<{
   const targetId = String(id || '').trim();
   if (!targetId) return { success: false, error: 'ID transaksi pengeluaran wajib ada.' };
 
-  const scriptUrl = process.env.GOOGLE_SCRIPT_URL?.trim();
+  const scriptUrl = getEffectiveScriptConfig().url;
   let remoteDeleted = false;
 
   if (scriptUrl) {
@@ -797,7 +808,7 @@ export async function addSubsidi(item: SubsidiInput): Promise<{
   const matchedKat = localDb.kategori.find(k => matchCategory(item.kategoriNama, k) || matchCategory(item.kategoriId, k));
   const kategoriId = item.kategoriId || matchedKat?.id || '';
   const kategoriNama = matchedKat?.namaKategori || item.kategoriNama || '';
-  const scriptUrl = process.env.GOOGLE_SCRIPT_URL?.trim();
+  const scriptUrl = getEffectiveScriptConfig().url;
   const isRemoteActive = Boolean(scriptUrl);
 
   const prepared: SubsidiItem = {
@@ -854,7 +865,7 @@ export async function updateSubsidi(item: Partial<SubsidiItem> & { id: string })
 }> {
   if (!item.id) return { success: false, error: 'ID subsidi wajib ada.' };
 
-  const scriptUrl = process.env.GOOGLE_SCRIPT_URL?.trim();
+  const scriptUrl = getEffectiveScriptConfig().url;
   if (scriptUrl) {
     const remote = await callGoogleAppsScript('updateSubsidi', { data: item });
     if (!remote.success) {
@@ -895,7 +906,7 @@ export async function deleteSubsidi(id: string): Promise<{
   const targetId = String(id || '').trim();
   if (!targetId) return { success: false, error: 'ID subsidi wajib ada.' };
 
-  const scriptUrl = process.env.GOOGLE_SCRIPT_URL?.trim();
+  const scriptUrl = getEffectiveScriptConfig().url;
   let remoteDeleted = false;
 
   if (scriptUrl) {
@@ -982,7 +993,7 @@ export async function addPeriode(data: {
     createdAt: new Date().toISOString(),
   };
 
-  const scriptUrl = process.env.GOOGLE_SCRIPT_URL?.trim();
+  const scriptUrl = getEffectiveScriptConfig().url;
   if (scriptUrl) {
     const remote = await callGoogleAppsScript('createPeriode', { data: newPeriode });
     if (!remote.success) {
@@ -1004,7 +1015,7 @@ export async function setActivePeriode(id: string): Promise<{ success: boolean; 
   const target = localDb.periode.find(p => p.id === id);
   if (!target) return { success: false, error: 'Periode tidak ditemukan.' };
 
-  const scriptUrl = process.env.GOOGLE_SCRIPT_URL?.trim();
+  const scriptUrl = getEffectiveScriptConfig().url;
   if (scriptUrl) {
     const remote = await callGoogleAppsScript('updatePeriode', { data: { id, statusAktif: true } });
     if (!remote.success) {
@@ -1026,7 +1037,7 @@ export async function setActivePeriode(id: string): Promise<{ success: boolean; 
 export async function deletePeriode(id: string): Promise<{ success: boolean; error?: string }> {
   if (!id) return { success: false, error: 'ID periode wajib ada.' };
 
-  const scriptUrl = process.env.GOOGLE_SCRIPT_URL?.trim();
+  const scriptUrl = getEffectiveScriptConfig().url;
   let remoteDeleted = false;
   if (scriptUrl) {
     const remote = await callGoogleAppsScript('deletePeriode', { id });
@@ -1083,7 +1094,7 @@ export async function addKategori(namaKategori: string): Promise<{
     iconName: 'account_balance',
   };
 
-  const scriptUrl = process.env.GOOGLE_SCRIPT_URL?.trim();
+  const scriptUrl = getEffectiveScriptConfig().url;
   if (scriptUrl) {
     const remote = await callGoogleAppsScript('createKategori', { data: newKat });
     if (!remote.success) {
@@ -1104,7 +1115,7 @@ export async function updateKategori(item: { id: string; namaKategori?: string; 
   const kat = localDb.kategori.find(k => k.id === item.id);
   if (!kat) return { success: false, error: 'Kategori tidak ditemukan.' };
 
-  const scriptUrl = process.env.GOOGLE_SCRIPT_URL?.trim();
+  const scriptUrl = getEffectiveScriptConfig().url;
   if (scriptUrl) {
     const remote = await callGoogleAppsScript('updateKategori', { data: item });
     if (!remote.success) {
@@ -1123,7 +1134,7 @@ export async function updateKategori(item: { id: string; namaKategori?: string; 
 export async function deleteKategori(id: string): Promise<{ success: boolean; error?: string }> {
   if (!id) return { success: false, error: 'ID kategori wajib ada.' };
 
-  const scriptUrl = process.env.GOOGLE_SCRIPT_URL?.trim();
+  const scriptUrl = getEffectiveScriptConfig().url;
   let remoteDeleted = false;
   if (scriptUrl) {
     const remote = await callGoogleAppsScript('deleteKategori', { id });
