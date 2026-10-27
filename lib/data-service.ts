@@ -8,6 +8,7 @@ import {
   SyncStatus,
 } from './types';
 import { calculateFinancialSummary } from './summary';
+import { syncFromPublishedCsv } from './csv-importer';
 
 
 // Default Kategori Awal sesuai Permintaan User
@@ -364,6 +365,18 @@ export async function getAllData(): Promise<{
 }> {
   const scriptUrl = process.env.GOOGLE_SCRIPT_URL?.trim();
   const localDb = ensureLocalDb();
+
+  // Jika data lokal masih kosong, ambil data awal dari Google Sheets CSV publik
+  if (localDb.pengeluaran.length === 0 && localDb.subsidi.length === 0 && !process.env.MMD_DISABLE_CSV_SYNC) {
+    try {
+      const csvResult = await syncFromPublishedCsv();
+      if (csvResult.success && csvResult.data) {
+        localDb.pengeluaran = [...csvResult.data.pengeluaran];
+        localDb.subsidi = [...csvResult.data.subsidi];
+        saveLocalDb(localDb);
+      }
+    } catch (e) {}
+  }
 
   if (scriptUrl) {
     const remote = await callGoogleAppsScript('getData');

@@ -11,6 +11,7 @@ const path = require('path');
 
 // Pastikan pengujian berjalan di lingkungan lokal terisolasi tanpa merusak spreadsheet kas asli
 delete process.env.GOOGLE_SCRIPT_URL;
+process.env.MMD_DISABLE_CSV_SYNC = 'true';
 
 const {
   addSubsidi,
@@ -569,6 +570,44 @@ async function runAllTests() {
     if (originalAdminPin) process.env.ADMIN_PIN = originalAdminPin;
     if (originalSecret) process.env.ADMIN_SESSION_SECRET = originalSecret;
   }
+
+  // =========================================================================
+  // TES M — Parsing & Rekonsiliasi CSV Google Sheets Publik
+  // =========================================================================
+  console.log('\n📌 TES M — Parsing & Rekonsiliasi CSV Google Sheets Publik');
+  console.log('   Spesifikasi: Ekstraksi Laporan LBM, Subsidi 5.700.000, Rokok Surya 243.000, Saldo 5.457.000');
+
+  const { parsePublishedCsv } = require('../lib/csv-importer');
+  const sampleLiveCsv = `LAPORAN PENGELUARAN - LBM,,,,
+"jumadal ula, 1448 H",,,,
+Subsidi : 5.700.000,,,,
+,,,,
+,,,,
+,,,,
+Jenis Acara,Rincian Belanja,Jumlah Barang,Harga Satuan (Rp),Total (Rp)
+kegiatan lbm,rokok surya,9 pcs,"27,000","243,000"
+,,,,
+TOTAL SELURUH PENGELUARAN,,,,"243,000"
+,,,,
+Catatan: Harga dalam Rupiah (Rp). Total dihitung otomatis = Jumlah Barang × Harga Satuan,,,,`;
+
+  const parsedCsv = parsePublishedCsv(sampleLiveCsv);
+  assert(parsedCsv.kategoriNama === 'LBM (Lajnah Bahtsul Masail)', 'Tes M1: Kategori LBM terdeteksi akurat dari CSV');
+  assert(parsedCsv.labelPeriode === 'Jumadal Ula 1448 H', 'Tes M2: Periode Jumadal Ula 1448 H terdeteksi akurat');
+  assert(parsedCsv.subsidiNominal === 5700000, 'Tes M3: Nominal Subsidi Rp 5.700.000 terurai tepat', `Aktual: ${parsedCsv.subsidiNominal}`);
+  assert(parsedCsv.pengeluaran.length === 1, 'Tes M4: Jumlah item transaksi terurai tepat 1 item');
+  assert(parsedCsv.pengeluaran[0].namaBarang === 'rokok surya', 'Tes M5: Nama barang terurai tepat: rokok surya');
+  assert(parsedCsv.pengeluaran[0].jumlah === 9 && parsedCsv.pengeluaran[0].satuan === 'pcs', 'Tes M6: Jumlah 9 pcs terpisah dengan benar');
+  assert(parsedCsv.pengeluaran[0].hargaSatuan === 27000, 'Tes M7: Harga satuan Rp 27.000 terkonversi numerik');
+  assert(parsedCsv.pengeluaran[0].total === 243000, 'Tes M8: Total pengeluaran Rp 243.000 cocok');
+
+  const totalExpCalc = parsedCsv.pengeluaran.reduce((s, it) => s + it.total, 0);
+  const saldoCalc = parsedCsv.subsidiNominal - totalExpCalc;
+  assert(saldoCalc === 5457000, 'Tes M9: Rekalkulasi Saldo Tersisa = Rp 5.457.000 (5.700.000 - 243.000)', `Aktual: ${saldoCalc}`);
+
+  // Uji Idempotensi: parse ulang menghasilkan ID yang sama
+  const parsedCsvSecond = parsePublishedCsv(sampleLiveCsv);
+  assert(parsedCsvSecond.pengeluaran[0].id === parsedCsv.pengeluaran[0].id, 'Tes M10: ID transaksi stabil (fingerprint idempotency) tidak berubah');
 
   console.log('\n==========================================================');
   console.log(`HASIL AKHIR PENGUJIAN: ${passCount} LULUS, ${failCount} GAGAL`);

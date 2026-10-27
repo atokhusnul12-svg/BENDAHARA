@@ -1,13 +1,23 @@
 /**
  * =========================================================================
  * BENDAHARA MMD - GOOGLE APPS SCRIPT BACKEND
- * Majelis Musyawarah & Dirosah
+ * Majelis Musyawarah & Dirosah (MMD)
  * =========================================================================
- * Skrip ini dipasang di Google Sheets (Ekstensi -> Apps Script)
- * Berfungsi sebagai API penghubung aman antara Web App dan Google Sheets.
+ * 
+ * Skrip ini dipasang pada Google Sheets kas asli Anda:
+ * Menu: Ekstensi -> Apps Script
+ * 
+ * Fitur:
+ * 1. Pintu masuk aman (doPost) dengan validasi token rahasia Server-to-Server.
+ * 2. Pencegahan race condition dengan LockService (30 detik).
+ * 3. Menjaga tab laporan fisik (cth: LBM) tetap aman dan tidak rusak.
+ * 4. Menyimpan transaksi mentah di tab 'Pengeluaran' dengan format angka murni
+ *    namun bertampilan Rupiah ("Rp"#,##0) agar bisa di-SUM dan difilter.
+ * 5. Mendukung multi-rincian dalam satu acara menggunakan eventId yang sama.
+ * 6. Mengelola subsidi, kategori, dan siklus periode Hijriah secara otomatis.
  */
 
-// Konfigurasi Header Kolom
+// Konfigurasi Header Kolom Standar
 const HEADERS = {
   Pengeluaran: [
     'id', 'eventId', 'createdAt', 'updatedAt', 'tanggalTransaksi',
@@ -29,8 +39,8 @@ const HEADERS = {
 
 /**
  * Validasi Token Keamanan Server-to-Server
- * Token rahasia disimpan di Script Properties (File -> Project Settings -> Script Properties)
- * Properti: MMD_API_TOKEN
+ * Token rahasia disimpan di Script Properties:
+ * Project Settings (ikon roda gigi) -> Script Properties -> MMD_API_TOKEN
  */
 function validateAuth(token) {
   if (!token || typeof token !== 'string') {
@@ -38,22 +48,41 @@ function validateAuth(token) {
   }
   const scriptProps = PropertiesService.getScriptProperties();
   const configuredToken = scriptProps.getProperty('MMD_API_TOKEN');
-  
-  // Wajib mengonfigurasi MMD_API_TOKEN di Script Properties Google Apps Script
+
+  // Wajib mengatur MMD_API_TOKEN di Script Properties
   if (configuredToken && configuredToken.trim()) {
     return token.trim() === configuredToken.trim();
   }
-  
-  // Tanpa token di Script Properties, tolak semua akses penulisan demi keamanan
+
+  // Jika belum disetel di Script Properties, tolak semua akses penulisan demi keamanan
   return false;
 }
 
 /**
- * Endpoint GET - Health Check & Pemeriksaan Koneksi
+ * Mengambil Spreadsheet Aktif atau berdasarkan SPREADSHEET_ID di Script Properties
+ */
+function getSpreadsheet() {
+  const scriptProps = PropertiesService.getScriptProperties();
+  const customId = scriptProps.getProperty('SPREADSHEET_ID');
+
+  if (customId && customId.trim()) {
+    try {
+      return SpreadsheetApp.openById(customId.trim());
+    } catch (e) {
+      // Fallback ke spreadsheet tempat script ini terpasang
+    }
+  }
+
+  return SpreadsheetApp.getActiveSpreadsheet();
+}
+
+/**
+ * Endpoint GET - Pemeriksaan Kesehatan Layanan (Health Check)
+ * Tidak membocorkan data keuangan atau konfigurasi rahasia
  */
 function doGet(e) {
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = getSpreadsheet();
     return jsonResponse({
       success: true,
       status: 'online',
@@ -71,12 +100,12 @@ function doGet(e) {
 }
 
 /**
- * Endpoint POST - Penanganan Seluruh Perintah CRUD
+ * Endpoint POST - Pintu Masuk Seluruh Operasi CRUD yang Dilindungi
  */
 function doPost(e) {
   const lock = LockService.getScriptLock();
   try {
-    // Kunci untuk mencegah race condition / penulisan bersamaan
+    // Kunci proses selama maksimal 30 detik untuk mencegah konflik penulisan bersamaan
     lock.waitLock(30000);
 
     let payload;
@@ -86,20 +115,24 @@ function doPost(e) {
       return jsonResponse({ success: false, error: 'Format JSON permintaan tidak valid.' });
     }
 
-    // Validasi token rahasia
+    // 1. Validasi Token Otorisasi
     if (!validateAuth(payload.token)) {
-      return jsonResponse({ success: false, error: 'Akses ditolak: Token autentikasi salah atau tidak ada.' });
+      return jsonResponse({
+        success: false,
+        error: 'Akses ditolak: Token autentikasi salah atau belum diatur pada Script Properties (MMD_API_TOKEN).'
+      });
     }
 
     const action = payload.action;
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = getSpreadsheet();
     if (!ss) {
-      return jsonResponse({ success: false, error: 'Tidak dapat menemukan Spreadsheet aktif.' });
+      return jsonResponse({ success: false, error: 'Tidak dapat menemukan Spreadsheet tujuan.' });
     }
 
-    // Pastikan seluruh sheet dan header tersedia
+    // 2. Pastikan sheet master terinisialisasi dengan aman tanpa merusak sheet yang ada
     ensureSheetsInitialized(ss);
 
+    // 3. Eksekusi action yang diminta
     let result;
     switch (action) {
       case 'ping':
@@ -166,7 +199,7 @@ function doPost(e) {
 }
 
 /**
- * Format Response JSON
+ * Helper: Format Output JSON
  */
 function jsonResponse(data) {
   return ContentService
@@ -175,7 +208,7 @@ function jsonResponse(data) {
 }
 
 /**
- * Memastikan sheet dan header kolom ada tanpa menghapus data yang sudah ada
+ * Menyiapkan sheet master (Pengeluaran, Subsidi, Periode, Kategori) tanpa mengganggu sheet laporan fisik (seperti LBM)
  */
 function ensureSheetsInitialized(ss) {
   for (let sheetName in HEADERS) {
@@ -183,14 +216,12 @@ function ensureSheetsInitialized(ss) {
     if (!sheet) {
       sheet = ss.insertSheet(sheetName);
       sheet.appendRow(HEADERS[sheetName]);
-      // Format header tebal dan latar abu-abu lembut
       const headerRange = sheet.getRange(1, 1, 1, HEADERS[sheetName].length);
       headerRange.setFontWeight('bold');
       headerRange.setBackground('#005c55');
       headerRange.setFontColor('#ffffff');
       sheet.setFrozenRows(1);
     } else {
-      // Periksa apakah baris header sudah ada
       if (sheet.getLastRow() === 0) {
         sheet.appendRow(HEADERS[sheetName]);
         const headerRange = sheet.getRange(1, 1, 1, HEADERS[sheetName].length);
@@ -201,7 +232,7 @@ function ensureSheetsInitialized(ss) {
       }
     }
 
-    // Inisialisasi kategori bawaan jika sheet Kategori belum ada baris data
+    // Inisialisasi kategori bawaan jika sheet Kategori masih kosong
     if (sheetName === 'Kategori' && sheet.getLastRow() <= 1) {
       const now = new Date().toISOString();
       const defaultKategori = [
@@ -214,7 +245,7 @@ function ensureSheetsInitialized(ss) {
       });
     }
 
-    // Inisialisasi periode bawaan jika sheet Periode belum ada baris data
+    // Inisialisasi periode bawaan jika sheet Periode masih kosong
     if (sheetName === 'Periode' && sheet.getLastRow() <= 1) {
       const now = new Date().toISOString();
       const defaultPeriode = [
@@ -225,19 +256,6 @@ function ensureSheetsInitialized(ss) {
       });
     }
   }
-}
-
-/**
- * Status Ping
- */
-function handlePing(ss) {
-  return {
-    success: true,
-    spreadsheetName: ss.getName(),
-    spreadsheetId: ss.getId(),
-    serverTime: new Date().toISOString(),
-    sheets: ss.getSheets().map(function(s) { return s.getName(); })
-  };
 }
 
 /**
@@ -256,7 +274,6 @@ function getSheetObjects(ss, sheetName) {
 
   for (let r = 1; r < values.length; r++) {
     const row = values[r];
-    // Abaikan baris kosong
     if (!row[0] && !row[1]) continue;
 
     const obj = {};
@@ -270,7 +287,20 @@ function getSheetObjects(ss, sheetName) {
 }
 
 /**
- * Mengambil seluruh data
+ * Handle Ping
+ */
+function handlePing(ss) {
+  return {
+    success: true,
+    spreadsheetName: ss.getName(),
+    spreadsheetId: ss.getId(),
+    serverTime: new Date().toISOString(),
+    sheets: ss.getSheets().map(function(s) { return s.getName(); })
+  };
+}
+
+/**
+ * Handle Ambil Seluruh Data
  */
 function handleGetData(ss) {
   return {
@@ -283,14 +313,13 @@ function handleGetData(ss) {
 }
 
 /**
- * 1. Simpan Pengeluaran Baru (Mendukung Multi-item dalam 1 event)
+ * 1. Simpan Pengeluaran Baru (Mendukung Multi-rincian dalam 1 acara)
  */
 function handleCreatePengeluaran(ss, data) {
   const sheet = ss.getSheetByName('Pengeluaran');
   const now = new Date().toISOString();
   const items = Array.isArray(data) ? data : [data];
   const inserted = [];
-
   const headers = HEADERS.Pengeluaran;
 
   items.forEach(function(item) {
@@ -323,12 +352,15 @@ function handleCreatePengeluaran(ss, data) {
     const rowValues = headers.map(function(h) { return record[h]; });
     sheet.appendRow(rowValues);
     const newRow = sheet.getLastRow();
+
+    // Terapkan format angka murni dan tampilan mata uang Rupiah siap cetak fisik
     try {
       sheet.getRange(newRow, headers.indexOf('jumlah') + 1).setNumberFormat('#,##0');
       sheet.getRange(newRow, headers.indexOf('hargaSatuan') + 1).setNumberFormat('"Rp"#,##0');
       sheet.getRange(newRow, headers.indexOf('total') + 1).setNumberFormat('"Rp"#,##0');
       sheet.getRange(newRow, headers.indexOf('tanggalTransaksi') + 1).setNumberFormat('yyyy-mm-dd');
     } catch (fmtErr) {}
+
     inserted.push(record);
   });
 
@@ -387,11 +419,13 @@ function handleUpdatePengeluaran(ss, item) {
           sheet.getRange(r + 1, colIdx + 1).setValue(updated[key]);
         }
       }
+
       SpreadsheetApp.flush();
       try {
         var cache = CacheService.getScriptCache();
         if (cache) cache.removeAll(['all_data', 'subsidi_data', 'pengeluaran_data', 'data']);
       } catch (e) {}
+
       return { success: true, id: id, updated: updated };
     }
   }
@@ -400,7 +434,7 @@ function handleUpdatePengeluaran(ss, item) {
 }
 
 /**
- * Fungsi Bersama: Hapus baris berdasarkan ID unik (Case-Insensitive, Backup Scan, Flush, Invalidate Cache)
+ * Helper: Hapus baris berdasarkan ID unik
  */
 function deleteRowById(ss, sheetName, id) {
   const sheet = ss.getSheetByName(sheetName);
@@ -424,7 +458,6 @@ function deleteRowById(ss, sheetName, id) {
 
   const targetId = String(id).trim().toLowerCase();
 
-  // 1. Pencarian utama pada kolom ID terdeteksi
   for (let r = 1; r < values.length; r++) {
     const cellId = String(values[r][idColIndex] || '').trim().toLowerCase();
     if (cellId === targetId) {
@@ -435,22 +468,6 @@ function deleteRowById(ss, sheetName, id) {
         if (cache) cache.removeAll(['all_data', 'subsidi_data', 'pengeluaran_data', 'data']);
       } catch (e) {}
       return { success: true, message: sheetName + ' berhasil dihapus.', id: id };
-    }
-  }
-
-  // 2. Backup: pencarian menyeluruh di semua kolom jika posisi kolom bergeser
-  for (let r = 1; r < values.length; r++) {
-    for (let c = 0; c < values[r].length; c++) {
-      const cellVal = String(values[r][c] || '').trim().toLowerCase();
-      if (cellVal === targetId) {
-        sheet.deleteRow(r + 1);
-        SpreadsheetApp.flush();
-        try {
-          var cache = CacheService.getScriptCache();
-          if (cache) cache.removeAll(['all_data', 'subsidi_data', 'pengeluaran_data', 'data']);
-        } catch (e) {}
-        return { success: true, message: sheetName + ' berhasil dihapus.', id: id };
-      }
     }
   }
 
@@ -465,7 +482,7 @@ function handleDeletePengeluaran(ss, id) {
 }
 
 /**
- * 4. Tambah Subsidi
+ * 4. Tambah Subsidi Baru
  */
 function handleCreateSubsidi(ss, item) {
   const sheet = ss.getSheetByName('Subsidi');
@@ -490,10 +507,12 @@ function handleCreateSubsidi(ss, item) {
   const rowValues = HEADERS.Subsidi.map(function(h) { return record[h]; });
   sheet.appendRow(rowValues);
   const newRow = sheet.getLastRow();
+
   try {
     sheet.getRange(newRow, HEADERS.Subsidi.indexOf('nominal') + 1).setNumberFormat('"Rp"#,##0');
     sheet.getRange(newRow, HEADERS.Subsidi.indexOf('tanggalTransaksi') + 1).setNumberFormat('yyyy-mm-dd');
   } catch (fmtErr) {}
+
   SpreadsheetApp.flush();
   try {
     var cache = CacheService.getScriptCache();
@@ -516,16 +535,7 @@ function handleUpdateSubsidi(ss, item) {
 
   const values = sheet.getRange(1, 1, lastRow, sheet.getLastColumn()).getValues();
   const headers = values[0];
-  let idColIndex = -1;
-  for (let c = 0; c < headers.length; c++) {
-    const colName = String(headers[c] || '').trim().toLowerCase();
-    if (colName === 'id' || colName === 'kode' || colName.includes('id')) {
-      idColIndex = c;
-      break;
-    }
-  }
-  if (idColIndex === -1) idColIndex = 0;
-
+  const idColIndex = headers.indexOf('id');
   const targetId = String(id).trim().toLowerCase();
 
   for (let r = 1; r < values.length; r++) {
@@ -552,11 +562,13 @@ function handleUpdateSubsidi(ss, item) {
           sheet.getRange(r + 1, colIdx + 1).setValue(updated[key]);
         }
       }
+
       SpreadsheetApp.flush();
       try {
         var cache = CacheService.getScriptCache();
         if (cache) cache.removeAll(['all_data', 'subsidi_data', 'pengeluaran_data', 'data']);
       } catch (e) {}
+
       return { success: true, id: id, updated: updated };
     }
   }
@@ -572,7 +584,7 @@ function handleDeleteSubsidi(ss, id) {
 }
 
 /**
- * 7. Tambah Periode (dengan pencegahan duplikat)
+ * 7. Tambah Periode Hijriah
  */
 function handleCreatePeriode(ss, item) {
   const sheet = ss.getSheetByName('Periode');
@@ -580,7 +592,6 @@ function handleCreatePeriode(ss, item) {
   const tahun = (item.tahunHijriah || '').toString().trim();
   const label = namaBulan + ' ' + tahun + ' H';
 
-  // Cek duplikasi
   const lastRow = sheet.getLastRow();
   if (lastRow > 1) {
     const values = sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).getValues();
@@ -596,17 +607,6 @@ function handleCreatePeriode(ss, item) {
 
   const id = item.id || 'PER-' + Utilities.getUuid();
   const statusAktif = item.statusAktif !== undefined ? Boolean(item.statusAktif) : false;
-
-  // Jika periode baru aktif, nonaktifkan periode lain jika diinginkan
-  if (statusAktif && lastRow > 1) {
-    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-    const statusIdx = headers.indexOf('statusAktif');
-    if (statusIdx !== -1) {
-      for (let r = 2; r <= lastRow; r++) {
-        sheet.getRange(r, statusIdx + 1).setValue(false);
-      }
-    }
-  }
 
   const record = {
     id: id,
@@ -624,7 +624,7 @@ function handleCreatePeriode(ss, item) {
 }
 
 /**
- * 8. Update Periode / Jadikan Aktif
+ * 8. Update Periode
  */
 function handleUpdatePeriode(ss, item) {
   const sheet = ss.getSheetByName('Periode');
@@ -638,13 +638,6 @@ function handleUpdatePeriode(ss, item) {
   const headers = values[0];
   const idColIndex = headers.indexOf('id');
   const statusIdx = headers.indexOf('statusAktif');
-
-  // Jika hendak mengaktifkan, nonaktifkan semua dulu
-  if (item.statusAktif) {
-    for (let r = 1; r < values.length; r++) {
-      sheet.getRange(r + 1, statusIdx + 1).setValue(false);
-    }
-  }
 
   for (let r = 1; r < values.length; r++) {
     if (values[r][idColIndex] === id) {
@@ -661,7 +654,14 @@ function handleUpdatePeriode(ss, item) {
 }
 
 /**
- * 9. Tambah Kategori
+ * 9. Hapus Periode
+ */
+function handleDeletePeriode(ss, id) {
+  return deleteRowById(ss, 'Periode', id);
+}
+
+/**
+ * 10. Tambah Kategori
  */
 function handleCreateKategori(ss, item) {
   const sheet = ss.getSheetByName('Kategori');
@@ -698,7 +698,7 @@ function handleCreateKategori(ss, item) {
 }
 
 /**
- * 10. Update Kategori
+ * 11. Update Kategori
  */
 function handleUpdateKategori(ss, item) {
   const sheet = ss.getSheetByName('Kategori');
@@ -727,16 +727,8 @@ function handleUpdateKategori(ss, item) {
 }
 
 /**
- * 11. Hapus Periode
- */
-function handleDeletePeriode(ss, id) {
-  return deleteRowById(ss, 'Periode', id);
-}
-
-/**
  * 12. Hapus Kategori
  */
 function handleDeleteKategori(ss, id) {
   return deleteRowById(ss, 'Kategori', id);
 }
-
