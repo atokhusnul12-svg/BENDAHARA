@@ -1,5 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createSessionToken, validatePin, verifyAdminRequest } from '@/lib/auth';
+import {
+  checkRateLimit,
+  clearFailedAttempts,
+  createSessionToken,
+  getClientIp,
+  recordFailedAttempt,
+  validatePin,
+  verifyAdminRequest,
+} from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,9 +25,24 @@ export async function GET(request: NextRequest) {
 
 /**
  * POST /api/auth
- * Login / verifikasi PIN Bendahara
+ * Login / verifikasi PIN Bendahara dengan Perlindungan Brute-Force & Rate Limiting
  */
 export async function POST(request: NextRequest) {
+  const clientIp = getClientIp(request);
+
+  // 1. Periksa Batas Percobaan (Rate Limiting)
+  const rateLimitStatus = checkRateLimit(clientIp);
+  if (!rateLimitStatus.allowed) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: rateLimitStatus.error || 'Terlalu banyak percobaan PIN salah. Akses dikunci sementara.',
+        lockedForSeconds: rateLimitStatus.lockedForSeconds,
+      },
+      { status: 429 } // HTTP 429 Too Many Requests
+    );
+  }
+
   try {
     const body = await request.json().catch(() => ({}));
     const pin = String(body.pin || '').trim();
@@ -31,12 +54,37 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!validatePin(pin)) {
+    // 2. Validasi PIN
+    const isValid = validatePin(pin);
+
+    if (!isValid) {
+      // Catat kegagalan dan tambahkan delay kecil untuk menggagalkan automated brute-force tools
+      const failInfo = recordFailedAttempt(clientIp);
+      await new Promise(resolve => setTimeout(resolve, 600));
+
+      if (failInfo.locked) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'Terlalu banyak percobaan PIN salah. Akses ditolak dan dikunci selama 15 menit.',
+            lockedForSeconds: failInfo.lockedForSeconds,
+          },
+          { status: 429 }
+        );
+      }
+
       return NextResponse.json(
-        { success: false, error: 'PIN Akses Bendahara salah. Akses ditolak.' },
+        {
+          success: false,
+          error: `PIN Bendahara salah. Sisa kesempatan: ${failInfo.remainingAttempts} kali sebelum dikunci.`,
+          remainingAttempts: failInfo.remainingAttempts,
+        },
         { status: 401 }
       );
     }
+
+    // 3. Login Berhasil: Bersihkan riwayat kegagalan untuk IP ini
+    clearFailedAttempts(clientIp);
 
     const token = createSessionToken();
     const response = NextResponse.json({
@@ -51,7 +99,7 @@ export async function POST(request: NextRequest) {
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       path: '/',
-      maxAge: 24 * 60 * 60, // 24 jam
+      maxAge: 8 * 60 * 60, // Sesi 8 jam
     });
 
     return response;

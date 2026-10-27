@@ -1,10 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { calculateSummary, getAllData } from '@/lib/data-service';
+import { verifyAdminRequest } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   try {
+    const isPublicReadAllowed = process.env.ALLOW_PUBLIC_READ === 'true';
+    const isAuth = verifyAdminRequest(request);
+
+    // Lindungi data kas internal dari pembaca publik tanpa izin
+    if (!isPublicReadAllowed && !isAuth) {
+      return NextResponse.json(
+        {
+          success: false,
+          requireAuth: true,
+          error: 'Akses dibatasi: Diperlukan autentikasi PIN Bendahara untuk membaca buku kas internal.',
+        },
+        { status: 401 }
+      );
+    }
+
     const { searchParams } = new URL(request.url);
     const filterPeriode = searchParams.get('periode') || undefined;
     const filterKategori = searchParams.get('kategori') || undefined;

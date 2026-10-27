@@ -159,6 +159,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [isAdmin, setIsAdmin] = useState(false);
   const [isPinModalOpen, setIsPinModalOpen] = useState(false);
   const pinSuccessCallbackRef = useRef<(() => void) | null>(null);
+  const refreshDataRef = useRef<(() => Promise<void>) | null>(null);
 
   // Periksa status autentikasi admin ke server
   const checkAuthStatus = useCallback(async () => {
@@ -199,6 +200,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (res.ok && json.success) {
         setIsAdmin(true);
         showToast('Autentikasi Berhasil', 'Akses Bendahara terverifikasi.');
+        if (refreshDataRef.current) {
+          refreshDataRef.current();
+        }
         return { success: true };
       }
       return { success: false, error: json.error || 'PIN Bendahara salah.' };
@@ -590,6 +594,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           Pragma: 'no-cache',
         },
       });
+
+      if (res.status === 401) {
+        setIsAdmin(false);
+        setLoading(false);
+        return;
+      }
+
       const json = await res.json();
 
       if (json.success && json.data) {
@@ -683,6 +694,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [selectedPeriode, setSelectedPeriode]);
 
   useEffect(() => {
+    refreshDataRef.current = refreshData;
     refreshData();
   }, [refreshData]);
 

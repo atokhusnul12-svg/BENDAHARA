@@ -510,6 +510,66 @@ async function runAllTests() {
   assert(!publicDataStr.includes('MMD_API_TOKEN'), 'Tes J2: Variabel konfigurasi Script Properties TIDAK bocor ke publik');
   assert(publicData.syncStatus && !publicData.syncStatus.token, 'Tes J3: Objek syncStatus bebas dari atribut token sensitif');
 
+  // =========================================================================
+  // TES K — Rate Limiting & Perlindungan Brute-Force PIN Bendahara
+  // =========================================================================
+  console.log('\n📌 TES K — Rate Limiting & Perlindungan Brute-Force PIN Bendahara');
+  console.log('   Spesifikasi: 5 percobaan salah memicu penguncian sementara 15 menit');
+
+  const { checkRateLimit, recordFailedAttempt, clearFailedAttempts } = require('../lib/auth');
+  const testIp = '192.168.100.50';
+
+  const initialCheck = checkRateLimit(testIp);
+  assert(initialCheck.allowed === true && initialCheck.remainingAttempts === 5, 'Tes K1: Status awal IP bersih dengan 5 sisa kesempatan');
+
+  // Gagal 4 kali berturut-turut
+  for (let i = 1; i <= 4; i++) {
+    recordFailedAttempt(testIp);
+  }
+  const checkAfter4 = checkRateLimit(testIp);
+  assert(checkAfter4.allowed === true && checkAfter4.remainingAttempts === 1, 'Tes K2: Setelah 4x gagal, tersisa 1 kesempatan');
+
+  // Percobaan ke-5 (mencapai batas)
+  const fail5 = recordFailedAttempt(testIp);
+  assert(fail5.locked === true, 'Tes K3: Percobaan ke-5 memicu penguncian keamanan');
+
+  const checkLocked = checkRateLimit(testIp);
+  assert(checkLocked.allowed === false && checkLocked.lockedForSeconds > 0, 'Tes K4: IP yang terkunci ditolak untuk login ulang');
+
+  // Pemulihan / reset setelah login sukses
+  clearFailedAttempts(testIp);
+  const checkUnlocked = checkRateLimit(testIp);
+  assert(checkUnlocked.allowed === true && checkUnlocked.remainingAttempts === 5, 'Tes K5: Penghapusan catatan gagal memulihkan akses penuh');
+
+  // =========================================================================
+  // TES L — Integritas Konfigurasi Produksi & Penolakan Default Fallback
+  // =========================================================================
+  console.log('\n📌 TES L — Integritas Konfigurasi Produksi & Penolakan Default Fallback');
+  console.log('   Spesifikasi: Menolak operasi jika kredensial produksi belum diatur (No hardcoded fallback)');
+
+  const { getAdminPinConfig, getSecretKeyConfig } = require('../lib/auth');
+
+  const originalNodeEnv = process.env.NODE_ENV;
+  const originalAdminPin = process.env.ADMIN_PIN;
+  const originalSecret = process.env.ADMIN_SESSION_SECRET;
+
+  try {
+    process.env.NODE_ENV = 'production';
+    delete process.env.ADMIN_PIN;
+    delete process.env.ADMIN_SESSION_SECRET;
+    delete process.env.ADMIN_SECRET;
+
+    const prodPinCheck = getAdminPinConfig();
+    assert(prodPinCheck.success === false, 'Tes L1: Di lingkungan produksi, penulisan ditolak jika ADMIN_PIN belum diatur');
+
+    const prodSecretCheck = getSecretKeyConfig();
+    assert(prodSecretCheck.success === false, 'Tes L2: Di lingkungan produksi, pembuatan sesi ditolak jika ADMIN_SESSION_SECRET belum diatur');
+  } finally {
+    process.env.NODE_ENV = originalNodeEnv;
+    if (originalAdminPin) process.env.ADMIN_PIN = originalAdminPin;
+    if (originalSecret) process.env.ADMIN_SESSION_SECRET = originalSecret;
+  }
+
   console.log('\n==========================================================');
   console.log(`HASIL AKHIR PENGUJIAN: ${passCount} LULUS, ${failCount} GAGAL`);
   console.log('==========================================================\n');

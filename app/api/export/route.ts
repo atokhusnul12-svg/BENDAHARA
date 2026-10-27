@@ -1,11 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { calculateSummary, getAllData } from '@/lib/data-service';
+import { verifyAdminRequest } from '@/lib/auth';
 import * as XLSX from 'xlsx';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   try {
+    if (!verifyAdminRequest(request)) {
+      return NextResponse.json(
+        { success: false, error: 'Akses ditolak: Diperlukan autentikasi PIN Bendahara untuk mengekspor data keuangan.' },
+        { status: 401 }
+      );
+    }
     const { searchParams } = new URL(request.url);
     const filterPeriode = searchParams.get('periode') || undefined;
     const filterKategori = searchParams.get('kategori') || undefined;

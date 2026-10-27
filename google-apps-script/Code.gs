@@ -39,13 +39,13 @@ function validateAuth(token) {
   const scriptProps = PropertiesService.getScriptProperties();
   const configuredToken = scriptProps.getProperty('MMD_API_TOKEN');
   
-  // Jika admin sudah menyetel MMD_API_TOKEN di Script Properties (Disarankan untuk Produksi)
+  // Wajib mengonfigurasi MMD_API_TOKEN di Script Properties Google Apps Script
   if (configuredToken && configuredToken.trim()) {
     return token.trim() === configuredToken.trim();
   }
   
-  // Fallback awal jika admin belum mengonfigurasi Script Properties
-  return token.trim() === 'mmd-amanah-kas-secret';
+  // Tanpa token di Script Properties, tolak semua akses penulisan demi keamanan
+  return false;
 }
 
 /**
@@ -322,6 +322,13 @@ function handleCreatePengeluaran(ss, data) {
 
     const rowValues = headers.map(function(h) { return record[h]; });
     sheet.appendRow(rowValues);
+    const newRow = sheet.getLastRow();
+    try {
+      sheet.getRange(newRow, headers.indexOf('jumlah') + 1).setNumberFormat('#,##0');
+      sheet.getRange(newRow, headers.indexOf('hargaSatuan') + 1).setNumberFormat('"Rp"#,##0');
+      sheet.getRange(newRow, headers.indexOf('total') + 1).setNumberFormat('"Rp"#,##0');
+      sheet.getRange(newRow, headers.indexOf('tanggalTransaksi') + 1).setNumberFormat('yyyy-mm-dd');
+    } catch (fmtErr) {}
     inserted.push(record);
   });
 
@@ -482,6 +489,11 @@ function handleCreateSubsidi(ss, item) {
 
   const rowValues = HEADERS.Subsidi.map(function(h) { return record[h]; });
   sheet.appendRow(rowValues);
+  const newRow = sheet.getLastRow();
+  try {
+    sheet.getRange(newRow, HEADERS.Subsidi.indexOf('nominal') + 1).setNumberFormat('"Rp"#,##0');
+    sheet.getRange(newRow, HEADERS.Subsidi.indexOf('tanggalTransaksi') + 1).setNumberFormat('yyyy-mm-dd');
+  } catch (fmtErr) {}
   SpreadsheetApp.flush();
   try {
     var cache = CacheService.getScriptCache();

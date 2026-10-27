@@ -97,7 +97,7 @@ let inMemoryDb: AppDatabase = {
   config: {
     spreadsheetUrl: process.env.GOOGLE_SPREADSHEET_URL || '',
     scriptUrl: process.env.GOOGLE_SCRIPT_URL || '',
-    scriptToken: process.env.GOOGLE_SCRIPT_TOKEN || 'mmd-amanah-kas-secret',
+    scriptToken: process.env.GOOGLE_SCRIPT_TOKEN || '',
   },
 };
 
@@ -143,7 +143,7 @@ export function resetToCleanState(): AppDatabase {
     config: {
       spreadsheetUrl: process.env.GOOGLE_SPREADSHEET_URL || '',
       scriptUrl: process.env.GOOGLE_SCRIPT_URL || '',
-      scriptToken: process.env.GOOGLE_SCRIPT_TOKEN || 'mmd-amanah-kas-secret',
+      scriptToken: process.env.GOOGLE_SCRIPT_TOKEN || '',
     },
   };
   if (!isServerlessOrProd()) {
@@ -248,27 +248,40 @@ const saveLocalDb = persistLocalDb;
  */
 async function callGoogleAppsScript(action: string, payloadData: any = {}): Promise<any> {
   const scriptUrl = process.env.GOOGLE_SCRIPT_URL?.trim();
-  const token = process.env.GOOGLE_SCRIPT_TOKEN?.trim() || 'mmd-amanah-kas-secret';
+  const token = process.env.GOOGLE_SCRIPT_TOKEN?.trim();
 
   if (!scriptUrl || scriptUrl.length < 10) {
     return {
       success: false,
       isConfigured: false,
-      error: 'URL Google Apps Script belum dikonfigurasi di file environment (.env.local).',
+      error: 'URL Google Apps Script belum dikonfigurasi di file environment (.env.local / Vercel).',
     };
   }
+
+  // Pada lingkungan produksi, tolak jika token integrasi belum disetel
+  if (process.env.NODE_ENV === 'production' && (!token || token.length < 8)) {
+    return {
+      success: false,
+      isConfigured: false,
+      error: 'Variabel GOOGLE_SCRIPT_TOKEN belum disetel pada Environment Variables Vercel. Operasi ke Google Sheets ditolak demi keamanan.',
+    };
+  }
+
+  const effectiveToken = token || 'dev-token-local';
 
   try {
     const response = await fetch(scriptUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        token,
+        token: effectiveToken,
         action,
         ...payloadData,
       }),
       // Apps Script Web Apps sering me-redirect (302) ke script.googleusercontent.com
       redirect: 'follow',
+      // Timeout 15 detik agar tidak menggantung fungsi serverless
+      signal: AbortSignal.timeout(15000),
     });
 
     if (!response.ok) {

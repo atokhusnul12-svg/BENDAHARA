@@ -16,6 +16,8 @@ export default function HomePage() {
     syncStatus,
     openExpenseModal,
     openSubsidyModal,
+    isAdmin,
+    openPinModal,
   } = useApp();
 
   const [periodDropdownOpen, setPeriodDropdownOpen] = useState(false);
@@ -136,6 +138,27 @@ export default function HomePage() {
           </div>
         </div>
       </div>
+
+      {/* Lock Notification Banner jika belum terautentikasi */}
+      {!isAdmin && (
+        <div className="flex items-center justify-between gap-3 p-3.5 mb-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl text-amber-950 shadow-xs">
+          <div className="flex items-center gap-2.5">
+            <span className="material-symbols-outlined text-[22px] text-amber-700" style={{ fontVariationSettings: "'FILL' 1" }}>
+              lock
+            </span>
+            <div className="flex flex-col">
+              <span className="font-bold text-xs">Buku Kas Internal Terkunci</span>
+              <span className="text-[11px] text-amber-900/80">Masukkan PIN Bendahara untuk membuka akses penuh data keuangan.</span>
+            </div>
+          </div>
+          <button
+            onClick={() => openPinModal()}
+            className="flex-shrink-0 px-3.5 py-1.5 bg-primary text-on-primary text-xs font-bold rounded-xl shadow-xs hover:opacity-90 active:scale-95 transition-all"
+          >
+            Buka Kunci
+          </button>
+        </div>
+      )}
 
       {/* Section 2: 'Ringkasan Total' Hero Card */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary-container to-primary text-on-primary shadow-lg shadow-primary/10 p-5 mb-space-lg">
