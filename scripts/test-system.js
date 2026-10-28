@@ -370,12 +370,17 @@ async function runAllTests() {
   console.log('\n📌 TES H — Keamanan Autentikasi Server & Proteksi Endpoint API');
   console.log('   Spesifikasi: Verifikasi PIN timing-safe, HMAC session token, proteksi endpoint tanpa auth');
 
-  const { validatePin, createSessionToken, verifySessionToken, verifyAdminRequest } = require('../lib/auth');
+  const { validatePin, validateLogin, createSessionToken, verifySessionToken, verifyAdminRequest } = require('../lib/auth');
 
-  // 1. Uji Validasi PIN
+  // 1. Uji Validasi PIN & Password Login
   assert(validatePin('144805') === true, 'Tes H1: PIN Bendahara yang benar (144805) diterima');
   assert(validatePin('123456') === false, 'Tes H2: PIN Bendahara yang salah ditolak');
   assert(validatePin('') === false, 'Tes H3: PIN kosong ditolak');
+  assert(validateLogin('MMD', 'IRENG') === true, 'Tes H3a: Login dengan Username MMD & Password IRENG sah');
+  assert(validateLogin('mmd', 'ireng') === true, 'Tes H3b: Login case-insensitive mmd / ireng sah');
+  assert(validateLogin('MMD', 'SALAH') === false, 'Tes H3c: Password salah ditolak');
+  assert(validateLogin('SALAH', 'IRENG') === false, 'Tes H3d: Username salah ditolak');
+  assert(validatePin('IRENG') === true, 'Tes H3e: Password IRENG juga diterima sebagai PIN Bendahara');
 
   // 2. Uji HMAC Session Token
   const sessionToken = createSessionToken();

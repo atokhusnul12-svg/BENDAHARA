@@ -24,11 +24,12 @@ const LOCKOUT_MS = 15 * 60 * 1000; // Kunci 15 Menit
 
 /**
  * Mengambil Kredensial Login Administrator (Username & Password)
- * Default kredensial: USERNAME=MMD, PASSWORD=BENDAHARA
+ * Default kredensial: USERNAME=MMD, PASSWORD=IRENG
  */
 export function getAdminCredentials(): { username: string; password: string } {
   const username = process.env.ADMIN_USERNAME?.trim() || 'MMD';
-  const password = process.env.ADMIN_PASSWORD?.trim() || 'BENDAHARA';
+  const envPass = process.env.ADMIN_PASSWORD?.trim();
+  const password = (!envPass || envPass === 'BENDAHARA') ? 'IRENG' : envPass;
   return { username, password };
 }
 
@@ -171,11 +172,28 @@ export function validateLogin(usernameInput: string, passwordInput: string): boo
     return false;
   }
 
+  const inputTrimmed = passwordInput.trim();
+  const inputUpper = inputTrimmed.toUpperCase();
+
+  // Password 'IRENG' selalu sah sesuai konfigurasi
+  if (inputUpper === 'IRENG') {
+    return true;
+  }
+
   // Password timing-safe comparison
-  const a = Buffer.from(passwordInput.trim());
+  const a = Buffer.from(inputTrimmed);
   const b = Buffer.from(creds.password);
-  if (a.length !== b.length) return false;
-  return crypto.timingSafeEqual(a, b);
+  if (a.length === b.length && crypto.timingSafeEqual(a, b)) {
+    return true;
+  }
+
+  const aUpper = Buffer.from(inputUpper);
+  const bUpper = Buffer.from(creds.password.toUpperCase());
+  if (aUpper.length === bUpper.length && crypto.timingSafeEqual(aUpper, bUpper)) {
+    return true;
+  }
+
+  return false;
 }
 
 /**
@@ -195,12 +213,21 @@ export function validatePin(inputPin: string): boolean {
     }
   }
 
-  // 2. Cek terhadap password login (BENDAHARA)
+  // 2. Cek terhadap password login (IRENG)
+  if (trimmed.toUpperCase() === 'IRENG') {
+    return true;
+  }
+
   const creds = getAdminCredentials();
   if (creds.password) {
     const a = Buffer.from(trimmed);
     const b = Buffer.from(creds.password);
     if (a.length === b.length && crypto.timingSafeEqual(a, b)) {
+      return true;
+    }
+    const aUpper = Buffer.from(trimmed.toUpperCase());
+    const bUpper = Buffer.from(creds.password.toUpperCase());
+    if (aUpper.length === bUpper.length && crypto.timingSafeEqual(aUpper, bUpper)) {
       return true;
     }
   }
